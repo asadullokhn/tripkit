@@ -218,9 +218,12 @@ h1,h2,h3 { font-family: var(--display); font-weight: 700; margin: 0; letter-spac
 }
 .settle-fab__chevron { font-size: .8rem; }
 .settle-fab.up .settle-fab__chevron { transform: rotate(180deg); }
+/* while the sheet is open the FAB is redundant and was overlapping the sheet's
+   bottom content — hide it; the scrim, grip, and Esc all close the sheet. */
+.settle-fab.up { display: none; }
 @media (min-width: 920px) { .settle-fab { display: none; } }
 
-.scrim { position: fixed; inset: 0; background: rgba(2,8,9,.6); z-index: 39; opacity: 0; pointer-events: none; transition: opacity .3s; }
+.scrim { position: fixed; inset: 0; background: rgba(2,8,9,.74); backdrop-filter: blur(2px); z-index: 39; opacity: 0; pointer-events: none; transition: opacity .3s; }
 .scrim.show { opacity: 1; pointer-events: auto; }
 @media (min-width: 920px) { .scrim { display: none; } }
 

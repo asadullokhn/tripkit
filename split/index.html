@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Hanken+Grotesque:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=13" />
+  <link rel="stylesheet" href="styles.css?v=14" />
 </head>
 <body>
   <div class="grain" aria-hidden="true"></div>
@@ -70,11 +70,11 @@
         <h2 class="block__title">Receipts
           <span class="block__hint">tap who shared each item</span>
           <span class="block__actions">
-            <button id="ocrBtn" class="ghost-btn ghost-btn--sm admin-only" type="button" title="Add receipt from a photo">📷 Photo</button>
+            <button id="ocrBtn" class="ghost-btn ghost-btn--sm" type="button" title="Add receipt from a photo" hidden>📷 Photo</button>
             <button id="addReceiptBtn" class="ghost-btn ghost-btn--sm" type="button">+ Receipt</button>
           </span>
         </h2>
-        <p class="ocr-privacy admin-only" id="ocrPrivacy">📷 sends the photo to the configured AI provider for OCR.</p>
+        <p class="ocr-privacy" id="ocrPrivacy" hidden>📷 The photo is sent to the configured AI provider to read the receipt.</p>
         <div class="receipts" id="receipts"></div>
       </section>
 
@@ -263,6 +263,6 @@
   <!-- print-only report -->
   <div id="report" class="report" aria-hidden="true"></div>
 
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
 </body>
 </html>

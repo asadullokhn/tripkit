@@ -18,8 +18,8 @@
   let tripId = new URLSearchParams(location.search).get("t") || "";
   let doc = null;
   let pass = "";
-  let admin = false, loginEnabled = false;
-  const canEdit = true;   // any passcode user can edit money entries (editor tier); admin adds people/trip/OCR
+  let admin = false, loginEnabled = false, ocrEnabled = false;
+  const canEdit = true;   // any passcode user can edit money entries (editor tier); admin adds people/trip
   let CUR = "IDR";
   let personById = {}, personColor = {};
   let pollTimer = null;
@@ -898,10 +898,11 @@
       openReceipt({ title: res.draft.title, date: res.draft.date, payerId: "", items: res.draft.items, grandTotal: res.draft.grandTotal }, res.warnings);
     } catch (err) {
       $("#ocrSpinner").hidden = true;
-      if (err.code === 503) toast("OCR isn't configured on the server.", { type: "err" });
+      if (err.code === 503) toast("Photo scanning isn't set up on the server yet.", { type: "err" });
       else if (err.code === 422) toast("Couldn't read a receipt — try a clearer photo or add it manually.", { type: "err" });
-      else if (err.code === 401 || err.code === 403) toast("Log in to use OCR.", { type: "err" });
-      else toast("OCR failed: " + (err.body && err.body.error ? err.body.error : err.message), { type: "err" });
+      else if (err.code === 429) toast("Too many uploads — try again in a bit.", { type: "err" });
+      else if (err.code === 401) { toast("Enter the passcode to upload.", { type: "err" }); lock(); }
+      else toast("Scan failed: " + (err.body && err.body.error ? err.body.error : err.message), { type: "err" });
     }
   });
 
@@ -934,6 +935,9 @@
     document.querySelectorAll(".admin-only").forEach((el) => { el.hidden = !admin; });
     $("#loginBtn").hidden = admin || !loginEnabled;
     $("#logoutBtn").hidden = !admin;
+    // OCR upload is editor-tier (any passcode user) — show only when configured server-side.
+    if ($("#ocrBtn")) $("#ocrBtn").hidden = !ocrEnabled;
+    if ($("#ocrPrivacy")) $("#ocrPrivacy").hidden = !ocrEnabled;
   }
 
   // ---------- export PDF ----------
@@ -1080,7 +1084,7 @@
 
   async function boot() {
     buildSwatches();
-    try { const me = await api("/me"); admin = !!me.admin; loginEnabled = !!me.loginEnabled; } catch (_) {}
+    try { const me = await api("/me"); admin = !!me.admin; loginEnabled = !!me.loginEnabled; ocrEnabled = !!me.ocrEnabled; } catch (_) {}
     applyAdminUI();
     pass = localStorage.getItem(PASS_KEY) || "";
     if (tripId) { const cc = cacheLoad(); if (cc) { adoptDoc(cc); render(); } }

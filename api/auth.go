@@ -253,5 +253,10 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 
 func handleMe(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, map[string]bool{"admin": isAdmin(r), "loginEnabled": cfgAdminHash != ""})
+	writeJSON(w, map[string]bool{
+		"admin":        isAdmin(r),
+		"loginEnabled": cfgAdminHash != "",
+		"ocrEnabled":   cfgOCRKey != "" && cfgOCRBase != "" && cfgOCRModel != "",
+		"aiEnabled":    cfgLLMKey != "" && cfgLLMBase != "" && cfgLLMModel != "",
+	})
 }

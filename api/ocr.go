@@ -54,10 +54,17 @@ type ocrResult struct {
 	GrandTotal *float64  `json:"grand_total"`
 }
 
+// editor-tier OCR is open to anyone with the passcode, so cap usage per IP.
+var ocrLimiter = newRateLimiter(40, time.Hour)
+
 func handleOCR(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if cfgOCRKey == "" || cfgOCRBase == "" || cfgOCRModel == "" {
 		httpError(w, http.StatusServiceUnavailable, "ocr not configured (set OCR_API_BASE, OCR_API_KEY, OCR_MODEL)")
+		return
+	}
+	if !ocrLimiter.allow(clientIP(r)) {
+		httpError(w, http.StatusTooManyRequests, "too many uploads — try again later")
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 8<<20) // 8 MiB
