@@ -667,6 +667,7 @@
   function render() {
     if (!doc) return;
     $("#tripName").textContent = doc.trip.name || "Split the Bill";
+    if ($("#planLink") && tripId) $("#planLink").href = "/trip/?t=" + encodeURIComponent(tripId);
     document.title = (doc.trip.name ? doc.trip.name + " · " : "") + "Split the Bill";
     document.body.classList.toggle("is-admin", admin);
     renderPeopleBar();

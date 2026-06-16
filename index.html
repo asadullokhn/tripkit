@@ -49,6 +49,9 @@
     .card__desc { color:var(--muted); font-size:.86rem; }
     .card__go { display:inline-block; margin-top:14px; font-family:"DM Mono",monospace; font-size:.76rem; color:var(--c,var(--teal)); }
     .card__admin { position:absolute; top:12px; right:12px; display:flex; gap:6px; z-index:2; }
+    .card__itin { position:absolute; bottom:18px; right:18px; z-index:2; font-family:"DM Mono",monospace; font-size:.72rem;
+      color:var(--teal); text-decoration:none; border:1px solid var(--line); border-radius:99px; padding:6px 11px; background:rgba(0,0,0,.25); transition:.15s; }
+    .card__itin:hover { color:var(--text); border-color:var(--teal); }
     .icon-btn { appearance:none; background:rgba(0,0,0,.3); border:1px solid var(--line); color:var(--muted); cursor:pointer;
       width:36px; height:36px; border-radius:9px; font-size:.85rem; line-height:1; transition:.15s; }
     .icon-btn:hover { color:var(--text); border-color:var(--teal); }
@@ -116,17 +119,7 @@
     <div class="section-label">Trips <button class="ghost" id="newTripBtn" hidden style="padding:5px 12px;font-size:.72rem">+ New trip</button></div>
     <div class="cards" id="trips"><p class="hint" id="tripsHint">Loading…</p></div>
 
-    <div class="section-label">Itinerary</div>
-    <div class="cards">
-      <a class="card" href="/trip/" style="--c:var(--teal)">
-        <div class="card__icon">🗺️</div>
-        <div class="card__title">Trip Itinerary</div>
-        <div class="card__desc">Your day-by-day route and map.</div>
-        <span class="card__go">Open itinerary →</span>
-      </a>
-    </div>
-
-    <p class="foot">balitrip.teztun.uz</p>
+    <p class="foot">Each trip has a bill splitter and a 🗺 itinerary · balitrip.teztun.uz</p>
   </main>
 
   <!-- themed login dialog -->
@@ -223,6 +216,11 @@
           <div class="card__desc">${t.people} people · ${t.receipts} receipts · ${t.expenses} shared costs · ${esc(t.baseCurrency)}</div>
           <span class="card__go">Open splitter →</span>`;
         wrap.appendChild(a);
+        const itin = document.createElement("a"); itin.className = "card__itin";
+        itin.href = "/trip/?t=" + encodeURIComponent(t.id);
+        itin.textContent = "🗺 Itinerary";
+        itin.setAttribute("aria-label", "Open itinerary for " + t.name);
+        wrap.appendChild(itin);
         if (admin) {
           const ad = document.createElement("div"); ad.className = "card__admin";
           const rn = document.createElement("button"); rn.className = "icon-btn"; rn.type = "button"; rn.title = "Rename"; rn.setAttribute("aria-label", "Rename " + t.name); rn.innerHTML = `<span aria-hidden="true">✎</span>`;

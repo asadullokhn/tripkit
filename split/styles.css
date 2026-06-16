@@ -612,3 +612,9 @@ button.pbar-chip:hover { border-color: var(--c, var(--teal)); transform: transla
 @media (pointer: coarse) {
   .copy-btn, .payout-edit, .link-btn { min-height: 40px; min-width: 36px; }
 }
+
+/* brand nav (← Tripkit · 🗺 Plan) — Plan⇄Bills view switcher */
+.brand__nav { display: flex; align-items: center; gap: 10px; }
+.brand__plan { font-family: var(--mono); font-size: .66rem; letter-spacing: .1em; text-transform: uppercase;
+  text-decoration: none; color: var(--teal); border: 1px solid var(--line); border-radius: 99px; padding: 3px 9px; transition: .15s; }
+.brand__plan:hover { color: var(--text); border-color: var(--teal); background: color-mix(in srgb, var(--teal) 14%, transparent); }

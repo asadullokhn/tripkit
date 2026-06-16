@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Hanken+Grotesque:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=15" />
+  <link rel="stylesheet" href="styles.css?v=16" />
 </head>
 <body>
   <div class="grain" aria-hidden="true"></div>
@@ -32,7 +32,7 @@
   <header class="topbar">
     <div class="topbar__inner">
       <div class="brand">
-        <a class="brand__kicker brand__home" href="/">← Tripkit</a>
+        <span class="brand__nav"><a class="brand__kicker brand__home" href="/">← Tripkit</a><a class="brand__plan" id="planLink" href="/trip/">🗺 Plan</a></span>
         <h1 class="brand__title" id="tripName">Split&nbsp;the&nbsp;Bill</h1>
       </div>
       <div class="topbar__actions">
@@ -286,6 +286,6 @@
   <!-- print-only report -->
   <div id="report" class="report" aria-hidden="true"></div>
 
-  <script src="app.js?v=15"></script>
+  <script src="app.js?v=16"></script>
 </body>
 </html>

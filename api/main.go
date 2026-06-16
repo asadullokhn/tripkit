@@ -107,7 +107,8 @@ func main() {
 	mux.HandleFunc("POST /api/trips/{id}/settlement/{tid}/verify", requireAdmin(handleVerify))
 	mux.HandleFunc("POST /api/trips/{id}/settlement/{tid}/unverify", requireAdmin(handleUnverify))
 
-	// itinerary — editor tier to edit, admin to AI-generate / clear
+	// itinerary — PUBLIC read (shareable plan, no money), editor to edit, admin to AI-generate / clear
+	mux.HandleFunc("GET /api/trips/{id}/itinerary", handlePublicItinerary)
 	mux.HandleFunc("PUT /api/trips/{id}/itinerary", requireEditor(handleItineraryPut))
 	mux.HandleFunc("DELETE /api/trips/{id}/itinerary", requireAdmin(handleItineraryDelete))
 	mux.HandleFunc("POST /api/trips/{id}/itinerary/generate", requireAdmin(handleGenerateItinerary))

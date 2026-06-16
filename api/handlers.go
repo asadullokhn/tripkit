@@ -355,6 +355,33 @@ func handleExpenseDelete(w http.ResponseWriter, r *http.Request) {
 
 // --- itinerary ---
 
+// handlePublicItinerary is the ONLY unauthenticated read: a trip's itinerary
+// (places/times) + trip name + people names, for sharing a plan to recruit
+// travellers. It deliberately exposes NO financial data (no amounts, no spend).
+func handlePublicItinerary(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	id, ok := tripID(r)
+	if !ok {
+		notFound(w)
+		return
+	}
+	d, err := store.get(id)
+	if err != nil {
+		notFound(w)
+		return
+	}
+	people := make([]map[string]string, 0, len(d.People))
+	for _, p := range d.People {
+		people = append(people, map[string]string{"id": p.ID, "name": p.Name, "color": p.Color})
+	}
+	writeJSON(w, map[string]any{
+		"trip":      map[string]string{"id": d.Trip.ID, "name": d.Trip.Name},
+		"people":    people,
+		"itinerary": d.Itinerary,
+		"rev":       d.Rev,
+	})
+}
+
 func handleItineraryPut(w http.ResponseWriter, r *http.Request) {
 	id, ok := tripID(r)
 	if !ok {

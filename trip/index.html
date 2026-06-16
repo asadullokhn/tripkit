@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#0b1411" />
-  <title>Bali Highlands Ride — 4-day route</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230a120f'/%3E%3Cpath d='M9 22 L16 9 L18 17 L23 22' fill='none' stroke='%2325b9cc' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='23' cy='22' r='2.4' fill='%23f0884a'/%3E%3C/svg%3E" />
+  <title>Itinerary · Tripkit</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -14,10 +14,21 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=20260616" />
+  <link rel="stylesheet" href="styles.css?v=20260617b" />
 </head>
 <body>
+  <!-- passcode gate -->
+  <div class="lock" id="lock" hidden>
+    <form class="lock__card" id="lockForm">
+      <span class="lock__kicker">Tripkit · Itinerary</span>
+      <h2 class="lock__title">Enter passcode</h2>
+      <input id="lockInput" class="lock__input" type="password" inputmode="numeric"
+             pattern="[0-9]*" maxlength="32" autocomplete="off" placeholder="••••" aria-label="Passcode" />
+      <p class="lock__err" id="lockErr" role="alert"></p>
+      <button type="submit" class="solid-btn">Unlock</button>
+    </form>
+  </div>
+
   <div id="app">
     <div id="map" aria-hidden="true"></div>
     <div class="grain" aria-hidden="true"></div>
@@ -26,12 +37,21 @@
     <!-- Top overlay: trip identity + day tabs -->
     <header class="topbar">
       <div class="brand">
-        <a class="home-link" href="/">← Bali Trip</a>
-        <span class="brand-eyebrow" id="brand-eyebrow">Bali · 4-day ride</span>
-        <h1 class="brand-title" id="brand-title">Bali Highlands Ride</h1>
+        <div class="brand-row">
+          <a class="home-link" href="/">← Tripkit</a>
+          <a class="bills-link" id="bills-link" href="/split/">💸 Bills</a>
+        </div>
+        <span class="brand-eyebrow" id="brand-eyebrow">Itinerary</span>
+        <h1 class="brand-title" id="brand-title">Itinerary</h1>
       </div>
       <div class="trip-chip" id="trip-chip"></div>
       <nav class="tabs" id="tabs" role="tablist" aria-label="Trip days"></nav>
+      <div class="edit-bar" id="edit-bar">
+        <button class="eb-btn" id="editToggle" type="button" aria-pressed="false">Edit</button>
+        <button class="eb-btn admin-only" id="aiBtn" type="button" hidden>✨ AI</button>
+        <button class="eb-btn" id="loginBtn" type="button" hidden>Log in</button>
+        <button class="eb-btn admin-only" id="logoutBtn" type="button" hidden>Log out</button>
+      </div>
     </header>
 
     <!-- Locate me -->
@@ -63,7 +83,127 @@
     </section>
   </div>
 
-  <script src="routes.js?v=20260616"></script>
-  <script src="app.js?v=20260616"></script>
+  <!-- AI draft banner -->
+  <div class="draft-banner" id="draftBanner" hidden>
+    <span>Reviewing AI draft — nothing saved yet.</span>
+    <div class="draft-actions">
+      <button class="eb-btn" id="draftRegen" type="button">Regenerate</button>
+      <button class="eb-btn" id="draftAppend" type="button">Append</button>
+      <button class="solid-btn solid-btn--sm" id="draftReplace" type="button">Replace</button>
+      <button class="eb-btn" id="draftDiscard" type="button">Discard</button>
+    </div>
+  </div>
+
+  <!-- stop dialog -->
+  <dialog id="stopDialog" class="dlg" aria-labelledby="stopTitle">
+    <form class="dlg__form" id="stopForm">
+      <h3 class="dlg__title" id="stopTitle">Add stop</h3>
+      <label class="fld"><span>Name</span><input id="stName" type="text" maxlength="80" required /></label>
+      <label class="fld"><span>Type</span>
+        <select id="stType">
+          <option value="start">Start</option><option value="viewpoint">Viewpoint</option>
+          <option value="waterfall">Waterfall</option><option value="beach">Beach</option>
+          <option value="garden">Garden / nature</option><option value="palace">Temple / palace</option>
+          <option value="museum">Museum</option><option value="activity">Activity</option>
+          <option value="food">Food</option><option value="breakfast">Breakfast / cafe</option>
+          <option value="hotel">Hotel</option><option value="fuel">Fuel / stop</option>
+          <option value="finish">Finish</option>
+        </select>
+      </label>
+      <div class="fld-row">
+        <label class="fld"><span>Time</span><input id="stTime" type="text" maxlength="12" placeholder="08:30" /></label>
+        <label class="fld"><span>Maps URL</span><input id="stUrl" type="url" placeholder="https://…" /></label>
+      </div>
+      <label class="fld"><span>Note</span><textarea id="stNote" rows="2" maxlength="400"></textarea></label>
+      <div class="fld-row">
+        <label class="fld"><span>Latitude</span><input id="stLat" type="number" step="any" inputmode="decimal" placeholder="-8.34" /></label>
+        <label class="fld"><span>Longitude</span><input id="stLng" type="number" step="any" inputmode="decimal" placeholder="115.66" /></label>
+      </div>
+      <p class="fld__err" id="stErr" role="alert" hidden></p>
+      <div class="dlg__actions">
+        <button type="button" class="eb-btn danger" id="stDelete" hidden>Delete</button>
+        <span style="flex:1"></span>
+        <button type="button" class="eb-btn" id="stCancel">Cancel</button>
+        <button type="submit" class="solid-btn solid-btn--sm" id="stSave">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- day dialog -->
+  <dialog id="dayDialog" class="dlg" aria-labelledby="dayTitle">
+    <form class="dlg__form" id="dayForm">
+      <h3 class="dlg__title" id="dayTitle">Add day</h3>
+      <label class="fld"><span>Title</span><input id="dyTitle" type="text" maxlength="80" placeholder="e.g. Arrival → Old Town" required /></label>
+      <div class="fld-row">
+        <label class="fld"><span>Label</span><input id="dyLabel" type="text" maxlength="24" placeholder="Day 1" /></label>
+        <label class="fld"><span>Date</span><input id="dyDate" type="text" maxlength="24" placeholder="Sat 13 Jun" /></label>
+      </div>
+      <div class="dlg__actions">
+        <button type="button" class="eb-btn danger" id="dyDelete" hidden>Delete day</button>
+        <span style="flex:1"></span>
+        <button type="button" class="eb-btn" id="dyCancel">Cancel</button>
+        <button type="submit" class="solid-btn solid-btn--sm" id="dySave">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- AI generate dialog -->
+  <dialog id="aiDialog" class="dlg" aria-labelledby="aiTitle">
+    <form class="dlg__form" id="aiForm">
+      <h3 class="dlg__title" id="aiTitle">Generate itinerary with AI</h3>
+      <label class="fld"><span>Destination</span><input id="aiDest" type="text" maxlength="80" placeholder="e.g. Ubud, Bali" required /></label>
+      <div class="fld-row">
+        <label class="fld"><span>Days</span><input id="aiDays" type="number" min="1" max="14" value="3" /></label>
+        <label class="fld"><span>Notes (optional)</span><input id="aiNotes" type="text" maxlength="120" placeholder="waterfalls, cafes…" /></label>
+      </div>
+      <p class="dlg__hint">The destination &amp; notes are sent to the configured AI provider.</p>
+      <p class="fld__err" id="aiErr" role="alert" hidden></p>
+      <div class="dlg__actions">
+        <button type="button" class="eb-btn" id="aiCancel">Cancel</button>
+        <button type="submit" class="solid-btn solid-btn--sm" id="aiGo">Generate</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- cost-link dialog -->
+  <dialog id="costDialog" class="dlg" aria-labelledby="costTitle">
+    <form class="dlg__form" id="costForm">
+      <h3 class="dlg__title" id="costTitle">Link a cost</h3>
+      <label class="fld"><span>Existing cost</span>
+        <select id="costSelect"><option value="">— none —</option></select>
+      </label>
+      <div class="cost-or">or</div>
+      <div class="fld-row">
+        <label class="fld"><span>＋ Add as shared cost (amount)</span><input id="costAmount" type="number" min="0" step="1" inputmode="numeric" placeholder="0" /></label>
+      </div>
+      <p class="dlg__hint" id="costHint">A new shared cost split evenly among everyone, linked to this stop.</p>
+      <p class="fld__err" id="costErr" role="alert" hidden></p>
+      <div class="dlg__actions">
+        <button type="button" class="eb-btn danger" id="costUnlink" hidden>Unlink</button>
+        <span style="flex:1"></span>
+        <button type="button" class="eb-btn" id="costCancel">Cancel</button>
+        <button type="submit" class="solid-btn solid-btn--sm" id="costSave">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- themed confirm -->
+  <dialog id="confirmDialog" class="dlg" aria-labelledby="cfTitle">
+    <div class="dlg__form">
+      <h3 class="dlg__title" id="cfTitle">Are you sure?</h3>
+      <p class="dlg__body" id="cfBody"></p>
+      <div class="dlg__actions">
+        <button type="button" class="eb-btn" id="cfCancel">Cancel</button>
+        <button type="button" class="solid-btn solid-btn--sm" id="cfOk">Confirm</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- spinner overlay -->
+  <div class="spin-overlay" id="spinner" role="status" aria-live="polite" hidden>
+    <div class="spin" aria-hidden="true"></div><span id="spinMsg">Working…</span>
+  </div>
+
+  <script src="app.js?v=20260617b"></script>
 </body>
 </html>
