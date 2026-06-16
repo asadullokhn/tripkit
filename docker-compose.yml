@@ -1,11 +1,13 @@
-# Keep the project name "balitrip-expenses" so the existing
-# balitrip-expenses_balitrip-data volume (the live split DB) is reused.
+# App is "Tripkit". The compose project name and data volume are intentionally
+# kept as "balitrip-expenses" / "balitrip-data" so the existing live data volume
+# (balitrip-expenses_balitrip-data) is reused — renaming stateful infra would
+# orphan the data. User-facing branding and image names are Tripkit.
 name: balitrip-expenses
 
 services:
   api:
     build: ./api
-    image: balitrip-api:latest
+    image: tripkit-api:latest
     container_name: balitrip-expenses-api
     environment:
       - DATA_DIR=/data
@@ -16,13 +18,16 @@ services:
       - OCR_API_BASE=${OCR_API_BASE:-}
       - OCR_API_KEY=${OCR_API_KEY:-}
       - OCR_MODEL=${OCR_MODEL:-}
+      - DEEPSEEK_API_BASE=${DEEPSEEK_API_BASE:-https://api.deepseek.com}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
     volumes:
       - balitrip-data:/data
     restart: unless-stopped
 
   app:
     build: .
-    image: balitrip-site:latest
+    image: tripkit-site:latest
     container_name: balitrip-expenses-app
     depends_on:
       - api

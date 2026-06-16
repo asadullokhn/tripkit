@@ -353,6 +353,52 @@ func handleExpenseDelete(w http.ResponseWriter, r *http.Request) {
 	respondMutate(w, d, err)
 }
 
+// --- itinerary ---
+
+func handleItineraryPut(w http.ResponseWriter, r *http.Request) {
+	id, ok := tripID(r)
+	if !ok {
+		notFound(w)
+		return
+	}
+	var in Itinerary
+	if err := readJSON(r, &in); err != nil {
+		httpError(w, 400, "bad request")
+		return
+	}
+	d, err := store.mutate(id, func(d *TripDoc) error {
+		for di := range in.Days {
+			if in.Days[di].ID == "" {
+				in.Days[di].ID = "d" + randID(4)
+			}
+			if in.Days[di].Stops == nil {
+				in.Days[di].Stops = []Stop{}
+			}
+			for si := range in.Days[di].Stops {
+				if in.Days[di].Stops[si].ID == "" {
+					in.Days[di].Stops[si].ID = "s" + randID(4)
+				}
+			}
+		}
+		d.Itinerary = &in
+		return nil
+	})
+	respondMutate(w, d, err)
+}
+
+func handleItineraryDelete(w http.ResponseWriter, r *http.Request) {
+	id, ok := tripID(r)
+	if !ok {
+		notFound(w)
+		return
+	}
+	d, err := store.mutate(id, func(d *TripDoc) error {
+		d.Itinerary = nil
+		return nil
+	})
+	respondMutate(w, d, err)
+}
+
 // --- adjustments ---
 
 func handleAdjustmentPost(w http.ResponseWriter, r *http.Request) {

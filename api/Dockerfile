@@ -1,4 +1,4 @@
-# balitrip API — static Go binary (stdlib only) on a slim base
+# tripkit API — static Go binary (stdlib only) on a slim base
 FROM golang:1.23-alpine AS build
 WORKDIR /src
 COPY go.mod ./

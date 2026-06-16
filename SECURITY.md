@@ -2,7 +2,7 @@
 
 ## Trust model
 
-balitrip is a **friends-trust app**, not a hardened multi-tenant SaaS:
+Tripkit is a **friends-trust app**, not a hardened multi-tenant SaaS:
 
 - **Reads** are gated by a single shared **passcode** (`PASSCODE`). This is obscurity for
   a small group, not strong authentication — anyone with the passcode can view all trips.

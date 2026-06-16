@@ -1,4 +1,4 @@
-# Static site (landing + itinerary + bill-splitter) served by nginx
+# Tripkit — static site (landing + itinerary + bill-splitter) served by nginx
 FROM nginx:1.27-alpine
 
 # landing page + logo

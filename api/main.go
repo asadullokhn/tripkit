@@ -40,6 +40,9 @@ func main() {
 	cfgOCRBase = env("OCR_API_BASE", "")
 	cfgOCRKey = env("OCR_API_KEY", "")
 	cfgOCRModel = env("OCR_MODEL", "")
+	cfgLLMBase = env("DEEPSEEK_API_BASE", "https://api.deepseek.com")
+	cfgLLMKey = env("DEEPSEEK_API_KEY", "")
+	cfgLLMModel = env("DEEPSEEK_MODEL", "deepseek-chat")
 
 	if s := env("SESSION_SECRET", ""); s != "" {
 		cfgSessionSecret = []byte(s)
@@ -93,10 +96,15 @@ func main() {
 	mux.HandleFunc("POST /api/trips/{id}/adjustments", requireEditor(handleAdjustmentPost))
 	mux.HandleFunc("DELETE /api/trips/{id}/adjustments/{aid}", requireEditor(handleAdjustmentDelete))
 
+	// itinerary — editor tier to edit, admin to AI-generate / clear
+	mux.HandleFunc("PUT /api/trips/{id}/itinerary", requireEditor(handleItineraryPut))
+	mux.HandleFunc("DELETE /api/trips/{id}/itinerary", requireAdmin(handleItineraryDelete))
+	mux.HandleFunc("POST /api/trips/{id}/itinerary/generate", requireAdmin(handleGenerateItinerary))
+
 	// OCR (admin: it costs money + leaves the box)
 	mux.HandleFunc("POST /api/ocr", requireAdmin(handleOCR))
 
 	addr := ":" + env("PORT", "8080")
-	log.Printf("balitrip API on %s (data: %s, login=%v, ocr=%v)", addr, dataDir, cfgAdminHash != "", cfgOCRKey != "")
+	log.Printf("tripkit API on %s (data: %s, login=%v, ocr=%v, ai=%v)", addr, dataDir, cfgAdminHash != "", cfgOCRKey != "", cfgLLMKey != "")
 	log.Fatal(http.ListenAndServe(addr, mux))
 }

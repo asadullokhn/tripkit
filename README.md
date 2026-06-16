@@ -1,4 +1,4 @@
-# balitrip
+# Tripkit
 
 A tiny, self-hostable **trip expense splitter** — and a trip companion. Track multiple
 trips, tap who shared each receipt item and shared cost, and get the minimal
@@ -42,8 +42,8 @@ Money is stored as **integer minor units** (whole rupiah for IDR).
 ## Quickstart
 
 ```bash
-git clone https://github.com/asadullokhn/balitrip.git
-cd balitrip
+git clone https://github.com/asadullokhn/tripkit.git
+cd tripkit
 cp .env.example .env
 
 # set an admin password hash:

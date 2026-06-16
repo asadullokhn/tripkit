@@ -20,7 +20,7 @@ Backend:
 cd api
 go run . -hashpw "dev"          # prints an ADMIN_PASSWORD_HASH
 ADMIN_PASSWORD_HASH='<paste>' SESSION_SECRET=dev PASSCODE=1606 \
-  DATA_DIR=/tmp/balitrip SEED_FILE=$PWD/seed/demo.json go run .
+  DATA_DIR=/tmp/tripkit SEED_FILE=$PWD/seed/demo.json go run .
 # API on http://localhost:8080
 ```
 

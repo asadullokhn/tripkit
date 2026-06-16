@@ -45,5 +45,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t balitrip-api ./api
-      - run: docker build -t balitrip-site .
+      - run: docker build -t tripkit-api ./api
+      - run: docker build -t tripkit-site .
