@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Hanken+Grotesque:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=12" />
+  <link rel="stylesheet" href="styles.css?v=13" />
 </head>
 <body>
   <div class="grain" aria-hidden="true"></div>
@@ -36,7 +36,7 @@
         <h1 class="brand__title" id="tripName">Split&nbsp;the&nbsp;Bill</h1>
       </div>
       <div class="topbar__actions">
-        <span class="sync" id="sync" title="Sync status"><span class="sync__dot"></span><span id="syncLabel">syncing…</span></span>
+        <span class="sync" id="sync" title="Sync status"><span class="sync__dot" aria-hidden="true"></span><span id="syncLabel" aria-live="polite">syncing…</span></span>
         <button id="loginBtn" class="ghost-btn" type="button" title="Log in to edit" hidden>Log in</button>
         <button id="logoutBtn" class="ghost-btn admin-only" type="button" title="Log out">Log out</button>
         <button id="exportBtn" class="ghost-btn" type="button" title="Export PDF">Export PDF</button>
@@ -44,7 +44,7 @@
     </div>
     <div class="progress" id="progress">
       <div class="progress__bar"><span id="progressFill"></span></div>
-      <span class="progress__label" id="progressLabel">0 of 0 items assigned</span>
+      <span class="progress__label" id="progressLabel" aria-live="polite">0 of 0 items assigned</span>
     </div>
   </header>
 
@@ -80,7 +80,7 @@
 
       <section class="block final" aria-label="Final settlement">
         <h2 class="block__title">Final settlement <span class="block__hint">who pays whom</span></h2>
-        <ul id="finalTransfers" class="final__list"></ul>
+        <ul id="finalTransfers" class="final__list" aria-live="polite"></ul>
         <p class="final__foot" id="finalNote"></p>
       </section>
     </div>
@@ -101,7 +101,7 @@
 
         <div class="transfers">
           <h3>Who pays whom</h3>
-          <ul id="transfers" class="transfers__list"></ul>
+          <ul id="transfers" class="transfers__list" aria-live="polite"></ul>
         </div>
 
         <p class="settle__foot" id="unassignedNote"></p>
@@ -109,54 +109,55 @@
     </aside>
   </main>
 
-  <div class="settle-fab" id="settleFab" role="button" tabindex="0" aria-label="Show settle up">
+  <button class="settle-fab" id="settleFab" type="button" aria-expanded="false" aria-controls="settle">
     <span id="fabLabel">Settle up</span>
-    <span class="settle-fab__chevron">▾</span>
-  </div>
+    <span class="settle-fab__chevron" aria-hidden="true">▾</span>
+  </button>
 
   <!-- hidden file input for OCR -->
   <input type="file" id="ocrFile" accept="image/jpeg,image/png,image/webp" hidden />
-  <div class="spinner-overlay" id="ocrSpinner" hidden>
-    <div class="spinner"></div><span>Reading receipt…</span>
+  <div class="spinner-overlay" id="ocrSpinner" role="status" aria-live="polite" hidden>
+    <div class="spinner" aria-hidden="true"></div><span>Reading receipt…</span>
   </div>
 
   <!-- login dialog -->
-  <dialog id="loginDialog" class="dialog">
-    <form method="dialog" class="dialog__form" id="loginForm">
-      <h3 class="dialog__title">Log in to edit</h3>
+  <dialog id="loginDialog" class="dialog" aria-labelledby="loginTitle">
+    <form class="dialog__form" id="loginForm">
+      <h3 class="dialog__title" id="loginTitle">Log in to edit</h3>
       <label class="field"><span>Admin password</span>
         <input id="loginPassword" type="password" autocomplete="current-password" required />
       </label>
-      <p class="lock__err" id="loginErr"></p>
+      <p class="field__err" id="loginErr" role="alert" hidden></p>
       <div class="dialog__actions">
         <button type="button" class="ghost-btn" id="loginCancel">Cancel</button>
-        <button type="submit" class="solid-btn">Log in</button>
+        <button type="submit" class="solid-btn" id="loginSubmit">Log in</button>
       </div>
     </form>
   </dialog>
 
   <!-- person dialog -->
-  <dialog id="personDialog" class="dialog">
-    <form method="dialog" class="dialog__form" id="personForm">
+  <dialog id="personDialog" class="dialog" aria-labelledby="pnTitle">
+    <form class="dialog__form" id="personForm">
       <h3 class="dialog__title" id="pnTitle">Add person</h3>
-      <label class="field"><span>Name</span><input id="pnName" type="text" maxlength="40" required /></label>
-      <div class="field"><span>Colour</span><div class="swatches" id="pnSwatches"></div></div>
+      <label class="field"><span>Name</span><input id="pnName" type="text" maxlength="40" /></label>
+      <div class="field"><span>Colour</span><div class="swatches" id="pnSwatches" role="radiogroup" aria-label="Person colour"></div></div>
+      <p class="field__err" id="pnErr" role="alert" hidden></p>
       <div class="dialog__actions">
         <button type="button" class="ghost-btn danger admin-only" id="pnDelete" hidden>Delete</button>
         <span style="flex:1"></span>
         <button type="button" class="ghost-btn" id="pnCancel">Cancel</button>
-        <button type="submit" class="solid-btn">Save</button>
+        <button type="submit" class="solid-btn" id="pnSave">Save</button>
       </div>
     </form>
   </dialog>
 
   <!-- receipt dialog (also used for OCR draft confirm) -->
-  <dialog id="receiptDialog" class="dialog dialog--wide">
-    <form method="dialog" class="dialog__form" id="receiptForm">
+  <dialog id="receiptDialog" class="dialog dialog--wide" aria-labelledby="rcTitle">
+    <form class="dialog__form" id="receiptForm">
       <h3 class="dialog__title" id="rcTitle">Add receipt</h3>
       <p class="rc-warnings" id="rcWarnings" hidden></p>
       <div class="field-row">
-        <label class="field"><span>Title</span><input id="rcName" type="text" maxlength="60" required /></label>
+        <label class="field"><span>Title</span><input id="rcName" type="text" maxlength="60" /></label>
         <label class="field"><span>Date</span><input id="rcDate" type="date" /></label>
       </div>
       <label class="field"><span>Paid by</span><select id="rcPayer"></select></label>
@@ -165,66 +166,103 @@
       </div>
       <label class="field"><span>Grand total (incl. tax/service) — 0 = sum of items</span>
         <input id="rcGrand" type="number" min="0" step="1" inputmode="numeric" value="0" /></label>
+      <p class="field__err" id="rcErr" role="alert" hidden></p>
       <div class="dialog__actions">
         <button type="button" class="ghost-btn danger" id="rcDelete" hidden>Delete</button>
         <span style="flex:1"></span>
         <button type="button" class="ghost-btn" id="rcCancel">Cancel</button>
-        <button type="submit" class="solid-btn">Save</button>
+        <button type="submit" class="solid-btn" id="rcSave">Save</button>
       </div>
     </form>
   </dialog>
 
   <!-- expense (shared cost) dialog -->
-  <dialog id="expenseDialog" class="dialog">
-    <form method="dialog" class="dialog__form" id="expenseForm">
+  <dialog id="expenseDialog" class="dialog" aria-labelledby="exTitle">
+    <form class="dialog__form" id="expenseForm">
       <h3 class="dialog__title" id="exTitle">Add shared cost</h3>
-      <label class="field"><span>Title</span><input id="exName" type="text" maxlength="60" required /></label>
+      <label class="field"><span>Title</span><input id="exName" type="text" maxlength="60" /></label>
       <div class="field-row">
-        <label class="field"><span>Amount</span><input id="exAmount" type="number" min="0" step="1" inputmode="numeric" required /></label>
+        <label class="field"><span>Amount</span><input id="exAmount" type="number" min="0" step="1" inputmode="numeric" /></label>
         <label class="field"><span>Paid by</span><select id="exPayer"></select></label>
       </div>
       <div class="field"><span>Split</span>
-        <div class="seg seg--4" id="exSplitMode">
-          <button type="button" class="seg__btn is-on" data-mode="EVENLY">Evenly</button>
-          <button type="button" class="seg__btn" data-mode="BY_SHARES">Shares</button>
-          <button type="button" class="seg__btn" data-mode="BY_PERCENTAGE">%</button>
-          <button type="button" class="seg__btn" data-mode="BY_AMOUNT">Amount</button>
+        <div class="seg seg--4" id="exSplitMode" role="radiogroup" aria-label="Split mode">
+          <button type="button" class="seg__btn is-on" role="radio" aria-checked="true" data-mode="EVENLY">Evenly</button>
+          <button type="button" class="seg__btn" role="radio" aria-checked="false" data-mode="BY_SHARES">Shares</button>
+          <button type="button" class="seg__btn" role="radio" aria-checked="false" data-mode="BY_PERCENTAGE">%</button>
+          <button type="button" class="seg__btn" role="radio" aria-checked="false" data-mode="BY_AMOUNT">Amount</button>
         </div>
       </div>
       <div class="field"><span id="exPartLabel">Shared by</span><div class="ex-parts" id="exParts"></div></div>
+      <div class="ex-summary-row">
+        <span class="ex-summary" id="exSummary"></span>
+        <button type="button" class="mini-btn" id="exDistribute">Distribute evenly</button>
+      </div>
+      <p class="field__err" id="exErr" role="alert" hidden></p>
       <div class="dialog__actions">
         <button type="button" class="ghost-btn danger" id="exDelete" hidden>Delete</button>
         <span style="flex:1"></span>
         <button type="button" class="ghost-btn" id="exCancel">Cancel</button>
-        <button type="submit" class="solid-btn">Save</button>
+        <button type="submit" class="solid-btn" id="exSave">Save</button>
       </div>
     </form>
   </dialog>
 
   <!-- adjustment dialog -->
-  <dialog id="adjustDialog" class="dialog">
-    <form method="dialog" class="dialog__form" id="adjustForm">
-      <h3 class="dialog__title">Add adjustment</h3>
+  <dialog id="adjustDialog" class="dialog" aria-labelledby="adjTitle">
+    <form class="dialog__form" id="adjustForm">
+      <h3 class="dialog__title" id="adjTitle">Add adjustment</h3>
       <div class="field"><span>Type</span>
-        <div class="seg" id="adjKind">
-          <button type="button" class="seg__btn is-on" data-kind="debt">Owes (extra debt)</button>
-          <button type="button" class="seg__btn" data-kind="payment">Already paid</button>
+        <div class="seg" id="adjKind" role="radiogroup" aria-label="Adjustment type">
+          <button type="button" class="seg__btn is-on" role="radio" aria-checked="true" data-kind="debt">Owes (extra debt)</button>
+          <button type="button" class="seg__btn" role="radio" aria-checked="false" data-kind="payment">Already paid</button>
         </div>
       </div>
       <label class="field"><span id="adjFromLabel">Who owes</span><select id="adjFrom" required></select></label>
       <label class="field"><span>To (receives)</span><select id="adjTo" required></select></label>
-      <label class="field"><span>Amount</span><input id="adjAmount" type="number" min="0" step="1" inputmode="numeric" required /></label>
+      <label class="field"><span>Amount</span><input id="adjAmount" type="number" min="0" step="1" inputmode="numeric" /></label>
       <label class="field"><span>Label</span><input id="adjLabel" type="text" maxlength="60" placeholder="e.g. e-scooter rental" /></label>
+      <p class="field__err" id="adjErr" role="alert" hidden></p>
       <div class="dialog__actions">
         <button type="button" class="ghost-btn" id="adjCancel">Cancel</button>
-        <button type="submit" class="solid-btn">Add</button>
+        <button type="submit" class="solid-btn" id="adjSave">Add</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- reusable searchable person picker -->
+  <dialog id="pickerDialog" class="dialog" aria-labelledby="pickerTitle">
+    <div class="dialog__form picker">
+      <h3 class="dialog__title" id="pickerTitle">Who shared this?</h3>
+      <input id="pickerSearch" class="picker-search" type="search" placeholder="Search people…" aria-label="Search people" autocomplete="off" />
+      <div class="picker-tools">
+        <button type="button" class="mini-btn" id="pickerAll">Select all</button>
+        <button type="button" class="mini-btn" id="pickerNone">Clear</button>
+        <span class="picker-count" id="pickerCount" aria-live="polite">0 selected</span>
+      </div>
+      <div class="picker-list" id="pickerList"></div>
+      <div class="dialog__actions">
+        <button type="button" class="ghost-btn" id="pickerCancel">Cancel</button>
+        <button type="button" class="solid-btn" id="pickerSave">Done</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- themed confirm -->
+  <dialog id="confirmDialog" class="dialog" aria-labelledby="confirmTitle">
+    <div class="dialog__form">
+      <h3 class="dialog__title" id="confirmTitle">Are you sure?</h3>
+      <p class="confirm-body" id="confirmBody"></p>
+      <div class="dialog__actions">
+        <button type="button" class="ghost-btn" id="confirmCancel">Cancel</button>
+        <button type="button" class="solid-btn" id="confirmOk">Confirm</button>
+      </div>
+    </div>
   </dialog>
 
   <!-- print-only report -->
   <div id="report" class="report" aria-hidden="true"></div>
 
-  <script src="app.js?v=12"></script>
+  <script src="app.js?v=13"></script>
 </body>
 </html>

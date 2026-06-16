@@ -1,6 +1,8 @@
 /* ============================================================
    Split the Bill — multi-trip, backend-synced.
    Reads gated by passcode; editing requires admin login.
+   Robustness (toasts/rollback/poll-guard), world-class dialogs,
+   and 10+ people scaling (condensed UI gated at >8) layered in.
    ============================================================ */
 (() => {
   "use strict";
@@ -9,6 +11,7 @@
   const PASS_KEY = "balitrip-pass";
   const PALETTE = ["#ff6f59", "#2fd6c3", "#ffb454", "#c08cff", "#7bd88f", "#ff8fc7", "#ffd66b", "#6cb8ff"];
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const BIG = 8; // >BIG people switches to condensed (avatar + picker) UI
   const grp = new Intl.NumberFormat("en-US");
 
   // --- state ---
@@ -20,6 +23,10 @@
   let CUR = "IDR";
   let personById = {}, personColor = {};
   let pollTimer = null;
+  let inflight = 0;          // in-flight writes
+  let sheetDragging = false; // bottom-sheet mid-gesture
+  let pendingDoc = null;     // doc from poll deferred while busy/dialog-open
+  const saveQueue = {};      // entityKey -> { timer, snap } (debounced writes + rollback snapshot)
 
   const $ = (s) => document.querySelector(s);
   const money = (n) => (CUR === "IDR" ? "Rp " : CUR + " ") + grp.format(Math.round(n || 0));
@@ -27,6 +34,8 @@
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const cacheKey = () => "balitrip-trip-" + tripId;
   const sumItems = (items) => (items || []).reduce((s, it) => s + (it.lineTotal || 0), 0);
+  const clone = (o) => (typeof structuredClone === "function" ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
+  const bigMode = () => (doc && doc.people && doc.people.length > BIG);
 
   function fmtWhen(date, time) {
     let out = "";
@@ -38,6 +47,36 @@
     return out.trim();
   }
   const dateSortKey = (r) => (r.date || "9999-99-99") + " " + (r.time || "99:99");
+
+  // distinct color for any index (palette first 8 — unchanged; golden-angle HSL beyond)
+  function genColor(i) { return i < PALETTE.length ? PALETTE[i] : `hsl(${Math.round((i * 137.508) % 360)} 65% 62%)`; }
+
+  // ---------- toasts (aria-live, framework-free) ----------
+  let toastWrap = null;
+  function ensureToasts() {
+    if (toastWrap) return toastWrap;
+    toastWrap = document.createElement("div");
+    toastWrap.className = "toasts"; toastWrap.setAttribute("aria-live", "polite"); toastWrap.setAttribute("aria-atomic", "false");
+    document.body.appendChild(toastWrap);
+    return toastWrap;
+  }
+  function toast(msg, opts = {}) {
+    const w = ensureToasts();
+    const t = document.createElement("div");
+    t.className = "toast" + (opts.type === "err" ? " toast--err" : opts.type === "ok" ? " toast--ok" : "");
+    t.setAttribute("role", opts.type === "err" ? "alert" : "status");
+    const span = document.createElement("span"); span.textContent = msg; t.appendChild(span);
+    if (opts.action && opts.actionLabel) {
+      const b = document.createElement("button"); b.type = "button"; b.className = "toast__action"; b.textContent = opts.actionLabel;
+      b.addEventListener("click", () => { remove(); opts.action(); });
+      t.appendChild(b);
+    }
+    w.appendChild(t);
+    let done = false;
+    function remove() { if (done) return; done = true; t.classList.add("toast--out"); setTimeout(() => t.remove(), 200); }
+    setTimeout(remove, opts.ms || (opts.action ? 6000 : 2600));
+    return remove;
+  }
 
   // --- api ---
   async function api(path, opts = {}) {
@@ -59,8 +98,17 @@
     doc = d;
     CUR = d.trip.baseCurrency || "IDR";
     personById = {}; personColor = {};
-    (d.people || []).forEach((p, i) => { personById[p.id] = p; personColor[p.id] = p.color || PALETTE[i % PALETTE.length]; });
-    try { localStorage.setItem(cacheKey(), JSON.stringify(d)); } catch (_) {}
+    (d.people || []).forEach((p, i) => { personById[p.id] = p; personColor[p.id] = p.color || genColor(i); });
+    cacheStore(d);
+  }
+  function cacheStore(d) {
+    try { localStorage.setItem(cacheKey(), JSON.stringify(d)); }
+    catch (_) {
+      try { // quota: drop other trips' caches and retry once
+        Object.keys(localStorage).forEach((k) => { if (k.startsWith("balitrip-trip-") && k !== cacheKey()) localStorage.removeItem(k); });
+        localStorage.setItem(cacheKey(), JSON.stringify(d));
+      } catch (_2) {}
+    }
   }
   function cacheLoad() {
     try { const raw = localStorage.getItem(cacheKey()); if (raw) return JSON.parse(raw); } catch (_) {}
@@ -74,16 +122,22 @@
     $("#syncLabel").textContent = status === "live" ? "live" : status === "offline" ? "offline" : "syncing…";
   }
 
-  // a write returns the full doc; adopt + re-render. Optimistic local edits happen first.
-  function pushDoc(promise) {
+  // A write returns the full doc; adopt + re-render. opts: { rollback, okMsg, errMsg }
+  function pushDoc(promise, opts = {}) {
+    inflight++;
     return promise
-      .then((d) => { adoptDoc(d); render(); setSync("live"); return d; })
+      .then((d) => { adoptDoc(d); render(); setSync("live"); if (opts.okMsg) toast(opts.okMsg, { type: "ok" }); return d; })
       .catch((e) => {
-        if (e.code === 401) lock("Session expired — enter passcode");
-        else if (e.code === 403) { setSync("offline"); alert("Editing needs login."); refreshTrip(); }
-        else setSync("offline");
+        if (e.code === 401) { lock("Session expired — enter passcode"); }
+        else if (e.code === 403) { setSync("offline"); if (opts.rollback) { opts.rollback(); render(); } toast("Log in to make changes", { type: "err" }); refreshTrip(); }
+        else {
+          setSync("offline");
+          if (opts.rollback) { opts.rollback(); render(); }
+          toast(opts.errMsg || "Couldn't save — change undone", { type: "err", action: opts.retry, actionLabel: opts.retry ? "Retry" : undefined });
+        }
         throw e;
-      });
+      })
+      .finally(() => { inflight = Math.max(0, inflight - 1); if (inflight === 0) flushPending(); });
   }
 
   // ---------- settlement ----------
@@ -150,22 +204,48 @@
 
   const pname = (id) => (personById[id] ? personById[id].name : "—");
   const pcol = (id) => personColor[id] || "var(--teal)";
+  const initials = (name) => String(name || "?").trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "?";
 
-  // ---------- chips ----------
+  // ---------- chips / avatars ----------
   function personChip(pid, active, onClick) {
     const b = document.createElement("button");
     b.type = "button"; b.className = "chip" + (canEdit ? "" : " chip--ro");
     b.style.setProperty("--c", pcol(pid));
     b.dataset.pid = pid;
     b.setAttribute("aria-pressed", active ? "true" : "false");
+    b.setAttribute("aria-label", (active ? "Sharing: " : "Not sharing: ") + pname(pid));
     b.textContent = pname(pid);
     if (canEdit && onClick) b.addEventListener("click", onClick);
     return b;
   }
-  function mkMini(label, fn) {
+  function mkMini(label, fn, aria) {
     const b = document.createElement("button");
     b.className = "mini-btn"; b.type = "button"; b.textContent = label;
+    if (aria) b.setAttribute("aria-label", aria);
     b.addEventListener("click", fn); return b;
+  }
+  function avatar(pid) {
+    const s = document.createElement("span"); s.className = "avatar"; s.style.setProperty("--c", pcol(pid));
+    s.textContent = initials(pname(pid)); s.title = pname(pid); s.setAttribute("aria-hidden", "true");
+    return s;
+  }
+  // condensed assigner: stack of assigned avatars + a button that opens the picker
+  function assignStack(ids, label, onOpen) {
+    const wrap = document.createElement("button");
+    wrap.type = "button"; wrap.className = "assign";
+    wrap.setAttribute("aria-label", ids.length ? `${label}: ${ids.map(pname).join(", ")} — tap to change` : `${label}: nobody — tap to assign`);
+    if (!ids.length) { wrap.classList.add("assign--empty"); wrap.textContent = "Assign people"; }
+    else {
+      const stack = document.createElement("span"); stack.className = "avatar-stack";
+      ids.slice(0, 6).forEach((id) => stack.appendChild(avatar(id)));
+      if (ids.length > 6) { const more = document.createElement("span"); more.className = "avatar avatar--more"; more.textContent = "+" + (ids.length - 6); more.setAttribute("aria-hidden", "true"); stack.appendChild(more); }
+      wrap.appendChild(stack);
+      const cap = document.createElement("span"); cap.className = "assign__cap"; cap.textContent = ids.length + (ids.length === 1 ? " person" : " people");
+      wrap.appendChild(cap);
+    }
+    if (canEdit && onOpen) wrap.addEventListener("click", onOpen);
+    else wrap.disabled = true;
+    return wrap;
   }
 
   // ---------- render: people bar ----------
@@ -176,7 +256,7 @@
       const chip = document.createElement(admin ? "button" : "span");
       chip.className = "pbar-chip"; chip.style.setProperty("--c", personColor[p.id]);
       chip.innerHTML = `<span class="pbar-dot"></span>${esc(p.name)}`;
-      if (admin) { chip.type = "button"; chip.addEventListener("click", () => openPerson(p)); }
+      if (admin) { chip.type = "button"; chip.setAttribute("aria-label", "Edit person: " + p.name); chip.addEventListener("click", () => openPerson(p)); }
       el.appendChild(chip);
     });
   }
@@ -194,7 +274,7 @@
     const wrap = $("#shared"); wrap.innerHTML = "";
     if (!doc.expenses.length) { wrap.innerHTML = `<p class="empty-hint">No shared costs${canEdit ? " — add one." : "."}</p>`; return; }
     doc.expenses.forEach((e) => {
-      const card = document.createElement("article"); card.className = "expense";
+      const card = document.createElement("article"); card.className = "expense"; card.id = "expense-" + e.id;
       const head = document.createElement("div"); head.className = "expense__head";
       head.innerHTML = `
         <div>
@@ -203,25 +283,34 @@
             ${(e.splitMode && e.splitMode !== "EVENLY") ? `<span class="tag">${esc(e.splitMode.replace("BY_", "").toLowerCase())}</span>` : ""}</div>
         </div>
         <div class="expense__amt">${money(e.amount)}</div>`;
-      if (canEdit) { const ed = mkEdit(() => openExpense(e)); head.appendChild(ed); }
+      if (canEdit) head.appendChild(mkEdit(() => openExpense(e), "Edit shared cost: " + e.title));
       card.appendChild(head);
 
-      const chips = document.createElement("div"); chips.className = "chips";
       const evenly = (e.splitMode || "EVENLY") === "EVENLY";
-      doc.people.forEach((p) => {
-        const active = (e.shares || {})[p.id] !== undefined;
-        chips.appendChild(personChip(p.id, active, () => {
-          if (evenly) toggleExpenseMember(e, p.id);
+      const memberIds = doc.people.filter((p) => (e.shares || {})[p.id] !== undefined).map((p) => p.id);
+
+      if (bigMode() || !evenly) {
+        // condensed: tap to open picker (evenly) or the expense dialog (weighted)
+        const row = document.createElement("div"); row.className = "assign-row";
+        row.appendChild(assignStack(memberIds, "Shared by", () => {
+          if (evenly) openPicker({ title: e.title || "Shared by", selected: memberIds, onSave: (ids) => setExpenseMembers(e, ids) });
           else openExpense(e);
         }));
-      });
-      if (canEdit && evenly) {
-        const q = document.createElement("span"); q.className = "chip-quick";
-        q.append(mkMini("Everyone", () => setExpenseMembers(e, doc.people.map((p) => p.id))),
-                 mkMini("Clear", () => setExpenseMembers(e, [])));
-        chips.appendChild(q);
+        card.appendChild(row);
+      } else {
+        const chips = document.createElement("div"); chips.className = "chips";
+        doc.people.forEach((p) => {
+          const active = (e.shares || {})[p.id] !== undefined;
+          chips.appendChild(personChip(p.id, active, () => toggleExpenseMember(e, p.id)));
+        });
+        if (canEdit) {
+          const q = document.createElement("span"); q.className = "chip-quick";
+          q.append(mkMini("Everyone", () => setExpenseMembers(e, doc.people.map((p) => p.id)), "Share with everyone"),
+                   mkMini("Clear", () => setExpenseMembers(e, []), "Clear sharers"));
+          chips.appendChild(q);
+        }
+        card.appendChild(chips);
       }
-      card.appendChild(chips);
       const note = document.createElement("div"); note.className = "split-note"; note.innerHTML = expenseShareText(e);
       card.appendChild(note);
       wrap.appendChild(card);
@@ -251,7 +340,7 @@
           <div class="payer">paid by <b style="color:${pcol(rc.payerId)}">${esc(pname(rc.payerId))}</b></div>
         </div>
         <div class="receipt__totals"><div class="receipt__grand">${money(grand)}</div></div>`;
-      if (canEdit) head.appendChild(mkEdit(() => openReceipt(rc)));
+      if (canEdit) head.appendChild(mkEdit(() => openReceipt(rc), "Edit receipt: " + rc.title));
       card.appendChild(head);
 
       const ul = document.createElement("ul"); ul.className = "items";
@@ -259,21 +348,29 @@
         const li = document.createElement("li"); li.className = "item";
         const top = document.createElement("div"); top.className = "item__top";
         const qty = it.quantity && it.quantity > 1 ? `<span class="item__qty">×${it.quantity}</span>` : "";
-        const flag = it.needsReview ? `<span class="warn" title="${esc(it.note || "Needs review")}">⚠</span>` : "";
+        const flag = it.needsReview ? `<span class="warn" title="${esc(it.note || "Needs review")}" aria-label="Needs review">⚠</span>` : "";
         top.innerHTML = `<span class="item__name">${esc(it.name)}${qty}${flag}</span>
           <span class="item__price">${money(it.lineTotal || 0)}</span>`;
         li.appendChild(top);
 
-        const chips = document.createElement("div"); chips.className = "chips";
-        doc.people.forEach((p) => chips.appendChild(personChip(p.id, (it.sharedBy || []).includes(p.id),
-          () => toggleItemSharer(rc, it, p.id))));
-        if (canEdit) {
-          const q = document.createElement("span"); q.className = "chip-quick";
-          q.append(mkMini("Everyone", () => setItemSharers(rc, it, doc.people.map((p) => p.id))),
-                   mkMini("Clear", () => setItemSharers(rc, it, [])));
-          chips.appendChild(q);
+        const sharers = (it.sharedBy || []).filter((id) => personById[id]);
+        if (bigMode()) {
+          const row = document.createElement("div"); row.className = "assign-row";
+          row.appendChild(assignStack(sharers, "Shared by", () =>
+            openPicker({ title: it.name || "Shared by", selected: sharers, onSave: (ids) => setItemSharers(rc, it, ids) })));
+          li.appendChild(row);
+        } else {
+          const chips = document.createElement("div"); chips.className = "chips";
+          doc.people.forEach((p) => chips.appendChild(personChip(p.id, (it.sharedBy || []).includes(p.id),
+            () => toggleItemSharer(rc, it, p.id))));
+          if (canEdit) {
+            const q = document.createElement("span"); q.className = "chip-quick";
+            q.append(mkMini("Everyone", () => setItemSharers(rc, it, doc.people.map((p) => p.id)), "Everyone shared this"),
+                     mkMini("Clear", () => setItemSharers(rc, it, []), "Clear sharers"));
+            chips.appendChild(q);
+          }
+          li.appendChild(chips);
         }
-        li.appendChild(chips);
         const note = document.createElement("div"); note.className = "split-note"; note.innerHTML = itemShareText(rc, it);
         li.appendChild(note);
         ul.appendChild(li);
@@ -283,9 +380,10 @@
     });
   }
 
-  function mkEdit(fn) {
+  function mkEdit(fn, aria) {
     const b = document.createElement("button");
-    b.className = "edit-btn"; b.type = "button"; b.title = "Edit"; b.textContent = "✎";
+    b.className = "edit-btn"; b.type = "button"; b.setAttribute("aria-label", aria || "Edit"); b.title = "Edit";
+    b.innerHTML = `<span aria-hidden="true">✎</span>`;
     b.addEventListener("click", fn); return b;
   }
 
@@ -295,39 +393,58 @@
     if (!transfers.length) { el.innerHTML = `<li class="${big ? "ftransfer" : "transfer"} empty">All square 🎉</li>`; return; }
     transfers.forEach((t) => {
       const li = document.createElement("li");
+      li.setAttribute("aria-label", `${pname(t.from)} pays ${pname(t.to)} ${money(t.amount)}`);
       if (big) {
         li.className = "ftransfer";
         li.innerHTML = `<span class="ftransfer__who">
-            <span class="person__dot" style="--c:${pcol(t.from)}"></span>
+            <span class="person__dot" style="--c:${pcol(t.from)}" aria-hidden="true"></span>
             <b style="color:${pcol(t.from)}">${esc(pname(t.from))}</b>
-            <span class="ftransfer__verb">pays</span>
+            <span class="ftransfer__verb" aria-hidden="true">pays</span>
             <b style="color:${pcol(t.to)}">${esc(pname(t.to))}</b>
           </span><span class="ftransfer__amt">${money(t.amount)}</span>`;
       } else {
         li.className = "transfer";
         li.innerHTML = `<b style="color:${pcol(t.from)}">${esc(pname(t.from))}</b>
-          <span class="arrow">→</span><b style="color:${pcol(t.to)}">${esc(pname(t.to))}</b>
+          <span class="arrow" aria-hidden="true">→</span><b style="color:${pcol(t.to)}">${esc(pname(t.to))}</b>
           <span class="amt">${money(t.amount)}</span>`;
       }
       el.appendChild(li);
     });
   }
 
+  function personRow(p, c) {
+    const n = c.net[p.id];
+    const sign = n > 0.5 ? "pos" : n < -0.5 ? "neg" : "";
+    const label = n > 0.5 ? "gets back" : n < -0.5 ? "owes" : "settled";
+    const row = document.createElement("div"); row.className = "person";
+    row.setAttribute("aria-label", `${p.name} ${label} ${money(Math.abs(n))}; consumed ${money(c.consumed[p.id])}, paid ${money(c.paid[p.id])}`);
+    row.innerHTML = `
+      <span class="person__dot" style="--c:${personColor[p.id]}" aria-hidden="true"></span>
+      <span><span class="person__name">${esc(p.name)}</span>
+        <span class="person__sub">had ${money(c.consumed[p.id])} · paid ${money(c.paid[p.id])}</span></span>
+      <span class="person__net ${sign}">${money(Math.abs(n))}<small>${label}</small></span>`;
+    return row;
+  }
+
   function renderSettle() {
     const c = compute();
     const peopleEl = $("#people"); peopleEl.innerHTML = "";
-    doc.people.forEach((p) => {
-      const n = c.net[p.id];
-      const sign = n > 0.5 ? "pos" : n < -0.5 ? "neg" : "";
-      const label = n > 0.5 ? "gets back" : n < -0.5 ? "owes" : "settled";
-      const row = document.createElement("div"); row.className = "person";
-      row.innerHTML = `
-        <span class="person__dot" style="--c:${personColor[p.id]}"></span>
-        <span><span class="person__name">${esc(p.name)}</span>
-          <span class="person__sub">had ${money(c.consumed[p.id])} · paid ${money(c.paid[p.id])}</span></span>
-        <span class="person__net ${sign}">${money(Math.abs(n))}<small>${label}</small></span>`;
-      peopleEl.appendChild(row);
-    });
+
+    if (bigMode()) {
+      // scale: actionable first, collapse the settled
+      const owing = [], getting = [], settled = [];
+      doc.people.forEach((p) => { const n = c.net[p.id]; (n < -0.5 ? owing : n > 0.5 ? getting : settled).push(p); });
+      owing.sort((a, b) => c.net[a.id] - c.net[b.id]);
+      getting.sort((a, b) => c.net[b.id] - c.net[a.id]);
+      owing.concat(getting).forEach((p) => peopleEl.appendChild(personRow(p, c)));
+      if (settled.length) {
+        const det = document.createElement("details"); det.className = "settled-group";
+        const sum = document.createElement("summary"); sum.textContent = `All settled (${settled.length})`; det.appendChild(sum);
+        settled.forEach((p) => det.appendChild(personRow(p, c))); peopleEl.appendChild(det);
+      }
+    } else {
+      doc.people.forEach((p) => peopleEl.appendChild(personRow(p, c)));
+    }
 
     const adjEl = $("#adjustList"); adjEl.innerHTML = "";
     if (!doc.adjustments.length) adjEl.innerHTML = `<li class="empty-hint">No manual adjustments.</li>`;
@@ -340,8 +457,9 @@
         <span class="amt">${money(a.amount)}</span>`;
       if (canEdit) {
         const del = document.createElement("button");
-        del.className = "adjust__del"; del.type = "button"; del.title = "Remove"; del.textContent = "✕";
-        del.addEventListener("click", () => pushDoc(api(`/trips/${tripId}/adjustments/${a.id}`, { method: "DELETE" })));
+        del.className = "adjust__del"; del.type = "button"; del.setAttribute("aria-label", "Remove adjustment");
+        del.innerHTML = `<span aria-hidden="true">✕</span>`;
+        del.addEventListener("click", () => deleteAdjustment(a));
         li.appendChild(del);
       }
       adjEl.appendChild(li);
@@ -373,62 +491,200 @@
     renderSettle();
   }
 
-  // ---------- mutations: receipts / expenses ----------
-  function findReceipt(rid) { return doc.receipts.find((r) => r.id === rid); }
-  function findExpense(eid) { return doc.expenses.find((e) => e.id === eid); }
+  // ---------- mutations: receipts / expenses (debounced + rollback) ----------
+  // scheduleSave debounces per entity and keeps the earliest pre-edit snapshot for rollback.
+  function scheduleSave(key, snap, fire) {
+    if (!saveQueue[key]) saveQueue[key] = { snap };
+    clearTimeout(saveQueue[key].timer);
+    saveQueue[key].timer = setTimeout(() => {
+      const s = saveQueue[key].snap; delete saveQueue[key];
+      fire(s);
+    }, 250);
+  }
+  function replaceReceipt(snap) { const i = doc.receipts.findIndex((r) => r.id === snap.id); if (i >= 0) doc.receipts[i] = snap; }
+  function replaceExpense(snap) { const i = doc.expenses.findIndex((e) => e.id === snap.id); if (i >= 0) doc.expenses[i] = snap; }
 
-  function saveReceipt(rc) { return pushDoc(api(`/trips/${tripId}/receipts/${rc.id}`, { method: "PUT", body: rc })); }
-  function saveExpense(e) { return pushDoc(api(`/trips/${tripId}/expenses/${e.id}`, { method: "PUT", body: e })); }
+  function saveReceiptDebounced(rc, snap) {
+    scheduleSave("receipt:" + rc.id, snap, (s) =>
+      pushDoc(api(`/trips/${tripId}/receipts/${rc.id}`, { method: "PUT", body: rc }), { rollback: () => replaceReceipt(s) }));
+  }
+  function saveExpenseDebounced(e, snap) {
+    scheduleSave("expense:" + e.id, snap, (s) =>
+      pushDoc(api(`/trips/${tripId}/expenses/${e.id}`, { method: "PUT", body: e }), { rollback: () => replaceExpense(s) }));
+  }
+  function snapFor(key, obj) { return saveQueue[key] ? null : clone(obj); } // earliest-in-burst snapshot
 
   function toggleItemSharer(rc, it, pid) {
+    const snap = snapFor("receipt:" + rc.id, rc);
     const set = new Set(it.sharedBy || []);
     set.has(pid) ? set.delete(pid) : set.add(pid);
     it.sharedBy = doc.people.map((p) => p.id).filter((id) => set.has(id));
-    render(); saveReceipt(rc);
+    render(); saveReceiptDebounced(rc, snap);
   }
-  function setItemSharers(rc, it, ids) { it.sharedBy = ids.slice(); render(); saveReceipt(rc); }
+  function setItemSharers(rc, it, ids) {
+    const snap = snapFor("receipt:" + rc.id, rc);
+    it.sharedBy = ids.slice(); render(); saveReceiptDebounced(rc, snap);
+  }
   function toggleExpenseMember(e, pid) {
+    const snap = snapFor("expense:" + e.id, e);
     e.shares = e.shares || {};
     if (e.shares[pid] !== undefined) delete e.shares[pid]; else e.shares[pid] = 1;
-    render(); saveExpense(e);
+    render(); saveExpenseDebounced(e, snap);
   }
   function setExpenseMembers(e, ids) {
-    const s = {}; ids.forEach((id) => s[id] = 1); e.shares = s; render(); saveExpense(e);
+    const snap = snapFor("expense:" + e.id, e);
+    const s = {}; ids.forEach((id) => s[id] = 1); e.shares = s; render(); saveExpenseDebounced(e, snap);
   }
+  function deleteAdjustment(a) {
+    const snap = clone(a);
+    doc.adjustments = doc.adjustments.filter((x) => x.id !== a.id); render();
+    pushDoc(api(`/trips/${tripId}/adjustments/${a.id}`, { method: "DELETE" }), {
+      okMsg: undefined,
+      rollback: () => { doc.adjustments.push(snap); },
+    }).then(() => {
+      toast("Adjustment removed", { type: "ok", action: () => readjust(snap), actionLabel: "Undo" });
+    }).catch(() => {});
+  }
+  function readjust(a) {
+    pushDoc(api(`/trips/${tripId}/adjustments`, { method: "POST", body: { kind: a.kind, fromId: a.fromId, toId: a.toId, amount: a.amount, label: a.label } }), { okMsg: "Restored" });
+  }
+
+  // ---------- generic dialog helpers (focus model, validation) ----------
+  let lastFocus = null;
+  function openDialog(dlg, focusSel) {
+    lastFocus = document.activeElement;
+    dlg.returnValue = "";
+    dlg.showModal();
+    setTimeout(() => { const f = focusSel && dlg.querySelector(focusSel); if (f) f.focus(); }, 30);
+  }
+  function closeDialog(dlg) {
+    dlg.close();
+    if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (_) {} }
+    lastFocus = null;
+  }
+  function clearErr(dlg) { dlg.querySelectorAll(".field__err").forEach((e) => { e.textContent = ""; e.hidden = true; }); }
+  function showErr(el, msg, focusEl) {
+    if (el) { el.textContent = msg; el.hidden = false; }
+    if (focusEl) focusEl.focus();
+  }
+  function busy(btn, on) {
+    if (!btn) return;
+    btn.disabled = on; btn.setAttribute("aria-busy", on ? "true" : "false");
+    if (on) { btn.dataset.label = btn.textContent; btn.textContent = "Saving…"; }
+    else if (btn.dataset.label) { btn.textContent = btn.dataset.label; delete btn.dataset.label; }
+  }
+  // submit helper: validate() -> if string returned, show error; else run save() (returns promise) and close on success.
+  function wireForm(form, dlg, validate, save, primaryBtn) {
+    form.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      clearErr(dlg);
+      const err = validate();
+      if (err) { showErr($("#" + err.el), err.msg, err.focus && $("#" + err.focus)); return; }
+      const btn = primaryBtn ? $(primaryBtn) : null; busy(btn, true);
+      Promise.resolve(save())
+        .then(() => { closeDialog(dlg); })
+        .catch(() => { /* toast already fired by pushDoc */ })
+        .finally(() => busy(btn, false));
+    });
+    dlg.addEventListener("cancel", (ev) => { ev.preventDefault(); closeDialog(dlg); });
+  }
+
+  // themed confirm() replacement -> Promise<bool>
+  const confirmDialog = $("#confirmDialog");
+  let confirmResolve = null;
+  function confirmAsk({ title, body, okLabel = "Confirm", danger = false }) {
+    return new Promise((resolve) => {
+      confirmResolve = resolve;
+      $("#confirmTitle").textContent = title || "Are you sure?";
+      $("#confirmBody").innerHTML = body || "";
+      const ok = $("#confirmOk"); ok.textContent = okLabel; ok.classList.toggle("danger-solid", danger);
+      openDialog(confirmDialog, danger ? "#confirmCancel" : "#confirmOk");
+    });
+  }
+  function resolveConfirm(v) { if (confirmResolve) { confirmResolve(v); confirmResolve = null; } closeDialog(confirmDialog); }
+  $("#confirmOk").addEventListener("click", () => resolveConfirm(true));
+  $("#confirmCancel").addEventListener("click", () => resolveConfirm(false));
+  confirmDialog.addEventListener("cancel", (ev) => { ev.preventDefault(); resolveConfirm(false); });
+
+  // ---------- reusable person picker (searchable) ----------
+  const pickerDialog = $("#pickerDialog");
+  let pickerSel = new Set(), pickerOnSave = null;
+  function renderPickerList(filter) {
+    const list = $("#pickerList"); list.innerHTML = "";
+    const f = (filter || "").trim().toLowerCase();
+    const ppl = doc.people.filter((p) => !f || p.name.toLowerCase().includes(f));
+    ppl.sort((a, b) => { const sa = pickerSel.has(a.id), sb = pickerSel.has(b.id); if (sa !== sb) return sa ? -1 : 1; return a.name.localeCompare(b.name); });
+    if (!ppl.length) { list.innerHTML = `<p class="empty-hint">No matches.</p>`; }
+    ppl.forEach((p) => {
+      const on = pickerSel.has(p.id);
+      const row = document.createElement("button"); row.type = "button"; row.className = "picker-row" + (on ? " is-on" : "");
+      row.setAttribute("aria-pressed", on ? "true" : "false");
+      row.innerHTML = `<span class="avatar" style="--c:${pcol(p.id)}" aria-hidden="true">${esc(initials(p.name))}</span>
+        <span class="picker-name">${esc(p.name)}</span><span class="picker-check" aria-hidden="true">${on ? "✓" : ""}</span>`;
+      row.addEventListener("click", () => { if (pickerSel.has(p.id)) pickerSel.delete(p.id); else pickerSel.add(p.id); renderPickerList($("#pickerSearch").value); updatePickerCount(); });
+      list.appendChild(row);
+    });
+  }
+  function updatePickerCount() { $("#pickerCount").textContent = pickerSel.size + " selected"; }
+  function openPicker({ title, selected, onSave }) {
+    pickerSel = new Set(selected || []); pickerOnSave = onSave;
+    $("#pickerTitle").textContent = title || "Who shared this?";
+    $("#pickerSearch").value = "";
+    renderPickerList(""); updatePickerCount();
+    openDialog(pickerDialog, "#pickerSearch");
+  }
+  $("#pickerSearch").addEventListener("input", (e) => renderPickerList(e.target.value));
+  $("#pickerAll").addEventListener("click", () => { doc.people.forEach((p) => pickerSel.add(p.id)); renderPickerList($("#pickerSearch").value); updatePickerCount(); });
+  $("#pickerNone").addEventListener("click", () => { pickerSel.clear(); renderPickerList($("#pickerSearch").value); updatePickerCount(); });
+  $("#pickerCancel").addEventListener("click", () => closeDialog(pickerDialog));
+  $("#pickerSave").addEventListener("click", () => {
+    const ids = doc.people.map((p) => p.id).filter((id) => pickerSel.has(id));
+    closeDialog(pickerDialog); if (pickerOnSave) pickerOnSave(ids);
+  });
+  pickerDialog.addEventListener("cancel", (ev) => { ev.preventDefault(); closeDialog(pickerDialog); });
 
   // ---------- person dialog ----------
   const personDialog = $("#personDialog");
   let pnEditing = null, pnColor = PALETTE[0];
   function buildSwatches() {
     const w = $("#pnSwatches"); w.innerHTML = "";
-    PALETTE.forEach((c) => {
-      const b = document.createElement("button"); b.type = "button"; b.className = "swatch";
+    PALETTE.forEach((c, i) => {
+      const b = document.createElement("button"); b.type = "button"; b.className = "swatch"; b.setAttribute("role", "radio");
+      b.setAttribute("aria-checked", "false"); b.setAttribute("aria-label", "Colour " + (i + 1));
       b.style.background = c; b.dataset.c = c;
-      b.addEventListener("click", () => { pnColor = c; w.querySelectorAll(".swatch").forEach((s) => s.classList.toggle("is-on", s.dataset.c === c)); });
+      b.addEventListener("click", () => selectSwatch(c));
       w.appendChild(b);
     });
   }
-  function selectSwatch(c) { pnColor = c; $("#pnSwatches").querySelectorAll(".swatch").forEach((s) => s.classList.toggle("is-on", s.dataset.c === c)); }
+  function selectSwatch(c) { pnColor = c; $("#pnSwatches").querySelectorAll(".swatch").forEach((s) => { const on = s.dataset.c === c; s.classList.toggle("is-on", on); s.setAttribute("aria-checked", on ? "true" : "false"); }); }
   function openPerson(p) {
     pnEditing = p ? p.id : null;
     $("#pnTitle").textContent = p ? "Edit person" : "Add person";
     $("#pnName").value = p ? p.name : "";
-    selectSwatch(p && p.color ? p.color : PALETTE[doc.people.length % PALETTE.length]);
+    selectSwatch(p && p.color ? p.color : genColor(doc.people.length));
     $("#pnDelete").hidden = !p;
-    personDialog.showModal();
+    clearErr(personDialog);
+    openDialog(personDialog, "#pnName");
   }
   $("#addPersonBtn").addEventListener("click", () => openPerson(null));
-  $("#pnCancel").addEventListener("click", () => personDialog.close());
-  $("#personForm").addEventListener("submit", () => {
-    const name = $("#pnName").value.trim(); if (!name) return;
-    const body = { name, color: pnColor };
-    if (pnEditing) pushDoc(api(`/trips/${tripId}/people/${pnEditing}`, { method: "PUT", body }));
-    else pushDoc(api(`/trips/${tripId}/people`, { method: "POST", body }));
-  });
-  $("#pnDelete").addEventListener("click", () => {
-    if (!pnEditing || !confirm("Delete this person? They'll be removed from all splits.")) return;
-    personDialog.close();
-    pushDoc(api(`/trips/${tripId}/people/${pnEditing}`, { method: "DELETE" }));
+  $("#pnCancel").addEventListener("click", () => closeDialog(personDialog));
+  wireForm($("#personForm"), personDialog,
+    () => { const name = $("#pnName").value.trim(); if (!name) return { el: "pnErr", msg: "Name is required", focus: "pnName" }; return null; },
+    () => {
+      const body = { name: $("#pnName").value.trim(), color: pnColor };
+      return pnEditing
+        ? pushDoc(api(`/trips/${tripId}/people/${pnEditing}`, { method: "PUT", body }), { okMsg: "Saved" })
+        : pushDoc(api(`/trips/${tripId}/people`, { method: "POST", body }), { okMsg: "Person added" });
+    }, "#pnSave");
+  $("#pnDelete").addEventListener("click", async () => {
+    if (!pnEditing) return;
+    const c = compute();
+    const onItems = (doc.receipts || []).reduce((n, rc) => n + (rc.items || []).filter((it) => (it.sharedBy || []).includes(pnEditing)).length, 0);
+    const ok = await confirmAsk({ title: "Delete this person?", danger: true, okLabel: "Delete",
+      body: `<b>${esc(pname(pnEditing))}</b> will be removed from all splits${onItems ? ` (${onItems} item${onItems > 1 ? "s" : ""})` : ""}. Their share is redistributed to the others.` });
+    if (!ok) return;
+    closeDialog(personDialog);
+    pushDoc(api(`/trips/${tripId}/people/${pnEditing}`, { method: "DELETE" }), { okMsg: "Person removed" });
   });
 
   // ---------- receipt dialog (manual + OCR draft) ----------
@@ -437,24 +693,28 @@
   function payerOptions(sel, selected) {
     sel.innerHTML = "";
     const none = document.createElement("option"); none.value = ""; none.textContent = "— nobody —"; sel.appendChild(none);
-    doc.people.forEach((p) => { const o = document.createElement("option"); o.value = p.id; o.textContent = p.name; if (p.id === selected) o.selected = true; sel.appendChild(o); });
+    doc.people.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach((p) => { const o = document.createElement("option"); o.value = p.id; o.textContent = p.name; if (p.id === selected) o.selected = true; sel.appendChild(o); });
   }
-  function renderRcItems() {
-    const w = $("#rcItems"); w.innerHTML = "";
-    rcItems.forEach((it, idx) => {
-      const row = document.createElement("div"); row.className = "rc-item";
-      row.innerHTML = `
-        <input class="ri-name" placeholder="Item" value="${esc(it.name || "")}" />
-        <input class="ri-qty" type="number" min="1" step="1" value="${it.quantity || 1}" title="qty" />
-        <input class="ri-total" type="number" min="0" step="1" value="${it.lineTotal || 0}" title="line total" />
-        <button type="button" class="ri-del" title="Remove">✕</button>`;
-      row.querySelector(".ri-name").addEventListener("input", (e) => it.name = e.target.value);
-      row.querySelector(".ri-qty").addEventListener("input", (e) => it.quantity = parseInt(e.target.value, 10) || 1);
-      row.querySelector(".ri-total").addEventListener("input", (e) => it.lineTotal = parseInt(e.target.value, 10) || 0);
-      row.querySelector(".ri-del").addEventListener("click", () => { rcItems.splice(idx, 1); renderRcItems(); });
-      w.appendChild(row);
-    });
+  function addRcItem(focus) {
+    rcItems.push({ name: "", quantity: 1, unitPrice: 0, lineTotal: 0, sharedBy: [] });
+    appendRcRow(rcItems[rcItems.length - 1], rcItems.length - 1, focus);
   }
+  function appendRcRow(it, idx, focus) {
+    const w = $("#rcItems");
+    const row = document.createElement("div"); row.className = "rc-item";
+    row.innerHTML = `
+      <input class="ri-name" aria-label="Item name" placeholder="Item" value="${esc(it.name || "")}" />
+      <input class="ri-qty" type="number" min="1" step="1" inputmode="numeric" aria-label="Quantity" value="${it.quantity || 1}" />
+      <input class="ri-total" type="number" min="0" step="1" inputmode="numeric" aria-label="Line total" value="${it.lineTotal || 0}" />
+      <button type="button" class="ri-del" aria-label="Remove item"><span aria-hidden="true">✕</span></button>`;
+    row.querySelector(".ri-name").addEventListener("input", (e) => it.name = e.target.value);
+    row.querySelector(".ri-qty").addEventListener("input", (e) => it.quantity = parseInt(e.target.value, 10) || 1);
+    row.querySelector(".ri-total").addEventListener("input", (e) => it.lineTotal = parseInt(e.target.value, 10) || 0);
+    row.querySelector(".ri-del").addEventListener("click", () => { const i = rcItems.indexOf(it); if (i >= 0) rcItems.splice(i, 1); row.remove(); });
+    w.appendChild(row);
+    if (focus) row.querySelector(".ri-name").focus();
+  }
+  function renderRcItems() { const w = $("#rcItems"); w.innerHTML = ""; rcItems.forEach((it, i) => appendRcRow(it, i)); }
   function openReceipt(rc, draftWarnings) {
     rcEditing = rc && rc.id ? rc.id : null;
     $("#rcTitle").textContent = rcEditing ? "Edit receipt" : (rc ? "Confirm scanned receipt" : "Add receipt");
@@ -469,71 +729,128 @@
     if (draftWarnings && draftWarnings.length) { wEl.hidden = false; wEl.innerHTML = "⚠ " + draftWarnings.map(esc).join("<br>⚠ "); }
     else wEl.hidden = true;
     $("#rcDelete").hidden = !rcEditing;
-    receiptDialog.showModal();
+    clearErr(receiptDialog);
+    openDialog(receiptDialog, "#rcName");
   }
   $("#addReceiptBtn").addEventListener("click", () => openReceipt(null));
-  $("#rcAddItem").addEventListener("click", () => { rcItems.push({ name: "", quantity: 1, unitPrice: 0, lineTotal: 0, sharedBy: [] }); renderRcItems(); });
-  $("#rcCancel").addEventListener("click", () => receiptDialog.close());
-  $("#receiptForm").addEventListener("submit", () => {
-    const items = rcItems.filter((it) => (it.name || "").trim() || it.lineTotal)
-      .map((it) => ({ id: it.id, name: it.name.trim() || "Item", quantity: it.quantity || 1, unitPrice: it.unitPrice || (it.quantity ? Math.round(it.lineTotal / it.quantity) : it.lineTotal), lineTotal: it.lineTotal || 0, sharedBy: it.sharedBy || [] }));
-    const body = { title: $("#rcName").value.trim() || "Receipt", date: $("#rcDate").value || "", payerId: $("#rcPayer").value, items, grandTotal: parseInt($("#rcGrand").value, 10) || 0 };
-    if (rcEditing) pushDoc(api(`/trips/${tripId}/receipts/${rcEditing}`, { method: "PUT", body }));
-    else pushDoc(api(`/trips/${tripId}/receipts`, { method: "POST", body }));
-  });
-  $("#rcDelete").addEventListener("click", () => {
-    if (!rcEditing || !confirm("Delete this receipt?")) return;
-    receiptDialog.close();
-    pushDoc(api(`/trips/${tripId}/receipts/${rcEditing}`, { method: "DELETE" }));
+  $("#rcAddItem").addEventListener("click", () => addRcItem(true));
+  $("#rcCancel").addEventListener("click", () => closeDialog(receiptDialog));
+  wireForm($("#receiptForm"), receiptDialog,
+    () => { if (!$("#rcName").value.trim()) return { el: "rcErr", msg: "Title is required", focus: "rcName" };
+            if (!rcItems.some((it) => (it.name || "").trim() || it.lineTotal)) return { el: "rcErr", msg: "Add at least one item" }; return null; },
+    () => {
+      const items = rcItems.filter((it) => (it.name || "").trim() || it.lineTotal)
+        .map((it) => ({ id: it.id, name: (it.name || "").trim() || "Item", quantity: it.quantity || 1, unitPrice: it.unitPrice || (it.quantity ? Math.round(it.lineTotal / it.quantity) : it.lineTotal), lineTotal: it.lineTotal || 0, sharedBy: it.sharedBy || [] }));
+      const body = { title: $("#rcName").value.trim() || "Receipt", date: $("#rcDate").value || "", payerId: $("#rcPayer").value, items, grandTotal: parseInt($("#rcGrand").value, 10) || 0 };
+      return rcEditing
+        ? pushDoc(api(`/trips/${tripId}/receipts/${rcEditing}`, { method: "PUT", body }), { okMsg: "Saved" })
+        : pushDoc(api(`/trips/${tripId}/receipts`, { method: "POST", body }), { okMsg: "Receipt added" });
+    }, "#rcSave");
+  $("#rcDelete").addEventListener("click", async () => {
+    if (!rcEditing) return;
+    const ok = await confirmAsk({ title: "Delete this receipt?", danger: true, okLabel: "Delete", body: "This removes the receipt and its items from the split." });
+    if (!ok) return;
+    closeDialog(receiptDialog);
+    pushDoc(api(`/trips/${tripId}/receipts/${rcEditing}`, { method: "DELETE" }), { okMsg: "Receipt deleted" });
   });
 
   // ---------- expense dialog ----------
   const expenseDialog = $("#expenseDialog");
   let exEditing = null, exMode = "EVENLY", exShares = {};
-  function setExMode(m) { exMode = m; document.querySelectorAll("#exSplitMode .seg__btn").forEach((b) => b.classList.toggle("is-on", b.dataset.mode === m)); renderExParts(); }
+  function applyMode(m, reseed) {
+    exMode = m;
+    document.querySelectorAll("#exSplitMode .seg__btn").forEach((b) => { const on = b.dataset.mode === m; b.classList.toggle("is-on", on); b.setAttribute("aria-checked", on ? "true" : "false"); });
+    if (reseed) {
+      const ids = Object.keys(exShares).filter((id) => personById[id]);
+      const amt = parseInt($("#exAmount").value, 10) || 0;
+      const n = ids.length || 1;
+      if (m === "EVENLY") ids.forEach((id) => exShares[id] = 1);
+      else if (m === "BY_SHARES") ids.forEach((id) => exShares[id] = 1);
+      else if (m === "BY_PERCENTAGE") ids.forEach((id) => exShares[id] = Math.round(100 / n));
+      else if (m === "BY_AMOUNT") ids.forEach((id) => exShares[id] = Math.floor(amt / n));
+    }
+    renderExParts();
+  }
+  function exSummary() {
+    const el = $("#exSummary"); if (!el) return;
+    const ids = Object.keys(exShares).filter((id) => personById[id]);
+    const amt = parseInt($("#exAmount").value, 10) || 0;
+    if (!ids.length) { el.className = "ex-summary warn-text"; el.textContent = "Pick at least one person."; return; }
+    if (exMode === "EVENLY") { el.className = "ex-summary"; el.textContent = `${money(amt / ids.length)} each · ${ids.length} ${ids.length === 1 ? "person" : "people"}`; return; }
+    if (exMode === "BY_SHARES") { const t = ids.reduce((s, id) => s + (exShares[id] || 0), 0); el.className = "ex-summary" + (t > 0 ? "" : " warn-text"); el.textContent = t > 0 ? `${t} shares total` : "Shares must be > 0"; return; }
+    if (exMode === "BY_PERCENTAGE") { const t = ids.reduce((s, id) => s + (exShares[id] || 0), 0); const ok = Math.abs(t - 100) < 0.5; el.className = "ex-summary" + (ok ? " ok-text" : " warn-text"); el.textContent = ok ? `Σ 100% ✓` : `Σ ${t}% — ${t < 100 ? (100 - t) + "% unallocated" : (t - 100) + "% over"}`; return; }
+    if (exMode === "BY_AMOUNT") { const t = ids.reduce((s, id) => s + (exShares[id] || 0), 0); const ok = t === amt; el.className = "ex-summary" + (ok ? " ok-text" : " warn-text"); el.textContent = `Σ ${money(t)} of ${money(amt)}` + (ok ? " ✓" : ""); return; }
+  }
+  function distributeEvenly() {
+    const ids = Object.keys(exShares).filter((id) => personById[id]); if (!ids.length) return;
+    const amt = parseInt($("#exAmount").value, 10) || 0; const n = ids.length;
+    if (exMode === "BY_PERCENTAGE") { const base = Math.floor(100 / n); ids.forEach((id) => exShares[id] = base); exShares[ids[0]] += 100 - base * n; }
+    else if (exMode === "BY_AMOUNT") { const base = Math.floor(amt / n); ids.forEach((id) => exShares[id] = base); exShares[ids[0]] += amt - base * n; }
+    else ids.forEach((id) => exShares[id] = 1);
+    renderExParts();
+  }
   function renderExParts() {
     const w = $("#exParts"); w.innerHTML = "";
     $("#exPartLabel").textContent = exMode === "EVENLY" ? "Shared by" : exMode === "BY_PERCENTAGE" ? "Percent each" : exMode === "BY_AMOUNT" ? "Amount each" : "Shares each";
+    w.classList.toggle("ex-parts--col", exMode !== "EVENLY" || bigMode());
     doc.people.forEach((p) => {
       const on = exShares[p.id] !== undefined;
       const row = document.createElement("div"); row.className = "ex-part" + (on ? " is-on" : "");
       const chip = document.createElement("button"); chip.type = "button"; chip.className = "chip"; chip.style.setProperty("--c", personColor[p.id]);
-      chip.setAttribute("aria-pressed", on ? "true" : "false"); chip.textContent = p.name;
+      chip.setAttribute("aria-pressed", on ? "true" : "false"); chip.setAttribute("aria-label", (on ? "Sharing: " : "Not sharing: ") + p.name); chip.textContent = p.name;
       chip.addEventListener("click", () => { if (exShares[p.id] !== undefined) delete exShares[p.id]; else exShares[p.id] = exMode === "EVENLY" ? 1 : (exMode === "BY_PERCENTAGE" ? 0 : 0); renderExParts(); });
       row.appendChild(chip);
       if (on && exMode !== "EVENLY") {
-        const inp = document.createElement("input"); inp.type = "number"; inp.min = "0"; inp.step = "1"; inp.className = "ex-share"; inp.value = exShares[p.id] || 0;
-        inp.addEventListener("input", (e) => exShares[p.id] = parseFloat(e.target.value) || 0);
+        const inp = document.createElement("input"); inp.type = "number"; inp.min = "0"; inp.step = "1"; inp.inputMode = "numeric"; inp.className = "ex-share";
+        inp.setAttribute("aria-label", p.name + " " + (exMode === "BY_PERCENTAGE" ? "percent" : exMode === "BY_AMOUNT" ? "amount" : "shares")); inp.value = exShares[p.id] || 0;
+        inp.addEventListener("input", (e) => { exShares[p.id] = parseFloat(e.target.value) || 0; exSummary(); });
         row.appendChild(inp);
       }
       w.appendChild(row);
     });
+    exSummary();
   }
-  function openExpense(e) {
+  function openExpense(e, prefill) {
     exEditing = e ? e.id : null;
     $("#exTitle").textContent = e ? "Edit shared cost" : "Add shared cost";
-    $("#exName").value = e ? e.title : "";
-    $("#exAmount").value = e ? e.amount : "";
+    $("#exName").value = e ? e.title : (prefill && prefill.title || "");
+    $("#exAmount").value = e ? e.amount : (prefill && prefill.amount || "");
     payerOptions($("#exPayer"), e ? e.payerId : "");
     exShares = e && e.shares ? Object.assign({}, e.shares) : {};
     if (!e) doc.people.forEach((p) => exShares[p.id] = 1); // default: everyone
-    setExMode(e && e.splitMode ? e.splitMode : "EVENLY");
+    applyMode(e && e.splitMode ? e.splitMode : "EVENLY", false);
     $("#exDelete").hidden = !e;
-    expenseDialog.showModal();
+    clearErr(expenseDialog);
+    openDialog(expenseDialog, "#exName");
   }
-  document.querySelectorAll("#exSplitMode .seg__btn").forEach((b) => b.addEventListener("click", () => setExMode(b.dataset.mode)));
+  document.querySelectorAll("#exSplitMode .seg__btn").forEach((b) => b.addEventListener("click", () => applyMode(b.dataset.mode, true)));
+  $("#exAmount").addEventListener("input", exSummary);
+  $("#exDistribute").addEventListener("click", distributeEvenly);
   $("#addExpenseBtn").addEventListener("click", () => openExpense(null));
-  $("#exCancel").addEventListener("click", () => expenseDialog.close());
-  $("#expenseForm").addEventListener("submit", () => {
-    const shares = {}; Object.keys(exShares).forEach((id) => { if (personById[id]) shares[id] = exMode === "EVENLY" ? 1 : (exShares[id] || 0); });
-    const body = { title: $("#exName").value.trim() || "Shared cost", amount: parseInt($("#exAmount").value, 10) || 0, payerId: $("#exPayer").value, splitMode: exMode, shares };
-    if (exEditing) pushDoc(api(`/trips/${tripId}/expenses/${exEditing}`, { method: "PUT", body }));
-    else pushDoc(api(`/trips/${tripId}/expenses`, { method: "POST", body }));
-  });
-  $("#exDelete").addEventListener("click", () => {
-    if (!exEditing || !confirm("Delete this shared cost?")) return;
-    expenseDialog.close();
-    pushDoc(api(`/trips/${tripId}/expenses/${exEditing}`, { method: "DELETE" }));
+  $("#exCancel").addEventListener("click", () => closeDialog(expenseDialog));
+  wireForm($("#expenseForm"), expenseDialog,
+    () => {
+      if (!$("#exName").value.trim()) return { el: "exErr", msg: "Title is required", focus: "exName" };
+      const amt = parseInt($("#exAmount").value, 10) || 0; if (amt <= 0) return { el: "exErr", msg: "Amount must be more than 0", focus: "exAmount" };
+      const ids = Object.keys(exShares).filter((id) => personById[id]); if (!ids.length) return { el: "exErr", msg: "Pick at least one person" };
+      if (exMode === "BY_PERCENTAGE") { const t = ids.reduce((s, id) => s + (exShares[id] || 0), 0); if (Math.abs(t - 100) >= 0.5) return { el: "exErr", msg: `Percentages must total 100% (now ${t}%)` }; }
+      if (exMode === "BY_AMOUNT") { const t = ids.reduce((s, id) => s + (exShares[id] || 0), 0); if (t !== amt) return { el: "exErr", msg: `Amounts must total ${money(amt)} (now ${money(t)})` }; }
+      if (exMode === "BY_SHARES") { const t = ids.reduce((s, id) => s + (exShares[id] || 0), 0); if (t <= 0) return { el: "exErr", msg: "Shares must be greater than 0" }; }
+      return null;
+    },
+    () => {
+      const shares = {}; Object.keys(exShares).forEach((id) => { if (personById[id]) shares[id] = exMode === "EVENLY" ? 1 : (exShares[id] || 0); });
+      const body = { title: $("#exName").value.trim() || "Shared cost", amount: parseInt($("#exAmount").value, 10) || 0, payerId: $("#exPayer").value, splitMode: exMode, shares };
+      return exEditing
+        ? pushDoc(api(`/trips/${tripId}/expenses/${exEditing}`, { method: "PUT", body }), { okMsg: "Saved" })
+        : pushDoc(api(`/trips/${tripId}/expenses`, { method: "POST", body }), { okMsg: "Cost added" });
+    }, "#exSave");
+  $("#exDelete").addEventListener("click", async () => {
+    if (!exEditing) return;
+    const ok = await confirmAsk({ title: "Delete this shared cost?", danger: true, okLabel: "Delete", body: "" });
+    if (!ok) return;
+    closeDialog(expenseDialog);
+    pushDoc(api(`/trips/${tripId}/expenses/${exEditing}`, { method: "DELETE" }), { okMsg: "Cost deleted" });
   });
 
   // ---------- adjustment dialog ----------
@@ -541,25 +858,32 @@
   let adjKind = "debt";
   function fillPeopleSelect(sel, idx) {
     sel.innerHTML = "";
-    doc.people.forEach((p) => { const o = document.createElement("option"); o.value = p.id; o.textContent = p.name; sel.appendChild(o); });
+    doc.people.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach((p) => { const o = document.createElement("option"); o.value = p.id; o.textContent = p.name; sel.appendChild(o); });
     if (idx != null && sel.options[idx]) sel.selectedIndex = idx;
   }
-  function setAdjKind(k) { adjKind = k; document.querySelectorAll("#adjKind .seg__btn").forEach((b) => b.classList.toggle("is-on", b.dataset.kind === k)); $("#adjFromLabel").textContent = k === "payment" ? "Who paid" : "Who owes"; }
+  function setAdjKind(k) { adjKind = k; document.querySelectorAll("#adjKind .seg__btn").forEach((b) => { const on = b.dataset.kind === k; b.classList.toggle("is-on", on); b.setAttribute("aria-checked", on ? "true" : "false"); }); $("#adjFromLabel").textContent = k === "payment" ? "Who paid" : "Who owes"; }
   document.querySelectorAll("#adjKind .seg__btn").forEach((b) => b.addEventListener("click", () => setAdjKind(b.dataset.kind)));
   $("#addAdjustBtn").addEventListener("click", () => {
-    if (!doc.people.length) { alert("Add people first."); return; }
+    if (doc.people.length < 2) { toast("Add at least two people first", { type: "err" }); return; }
     fillPeopleSelect($("#adjFrom"), 0); fillPeopleSelect($("#adjTo"), Math.min(1, doc.people.length - 1));
     $("#adjAmount").value = ""; $("#adjLabel").value = ""; setAdjKind("debt");
-    adjustDialog.showModal();
+    clearErr(adjustDialog);
+    openDialog(adjustDialog, "#adjFrom");
   });
-  $("#adjCancel").addEventListener("click", () => adjustDialog.close());
-  $("#adjustForm").addEventListener("submit", () => {
-    const fromId = $("#adjFrom").value, toId = $("#adjTo").value;
-    const amount = Math.max(0, parseInt($("#adjAmount").value, 10) || 0);
-    const label = $("#adjLabel").value.trim();
-    if (fromId && toId && fromId !== toId && amount > 0)
-      pushDoc(api(`/trips/${tripId}/adjustments`, { method: "POST", body: { kind: adjKind, fromId, toId, amount, label } }));
-  });
+  $("#adjCancel").addEventListener("click", () => closeDialog(adjustDialog));
+  wireForm($("#adjustForm"), adjustDialog,
+    () => {
+      const fromId = $("#adjFrom").value, toId = $("#adjTo").value;
+      const amount = Math.max(0, parseInt($("#adjAmount").value, 10) || 0);
+      if (!fromId || !toId) return { el: "adjErr", msg: "Pick both people" };
+      if (fromId === toId) return { el: "adjErr", msg: "Pick two different people" };
+      if (amount <= 0) return { el: "adjErr", msg: "Amount must be more than 0", focus: "adjAmount" };
+      return null;
+    },
+    () => {
+      const body = { kind: adjKind, fromId: $("#adjFrom").value, toId: $("#adjTo").value, amount: Math.max(0, parseInt($("#adjAmount").value, 10) || 0), label: $("#adjLabel").value.trim() };
+      return pushDoc(api(`/trips/${tripId}/adjustments`, { method: "POST", body }), { okMsg: "Adjustment added" });
+    }, "#adjSave");
 
   // ---------- OCR ----------
   $("#ocrBtn").addEventListener("click", () => $("#ocrFile").click());
@@ -574,31 +898,35 @@
       openReceipt({ title: res.draft.title, date: res.draft.date, payerId: "", items: res.draft.items, grandTotal: res.draft.grandTotal }, res.warnings);
     } catch (err) {
       $("#ocrSpinner").hidden = true;
-      if (err.code === 503) alert("OCR isn't configured on the server (needs OCR_API_BASE / OCR_API_KEY / OCR_MODEL).");
-      else if (err.code === 422) alert("Couldn't read a receipt from that photo — try a clearer image or add it manually.");
-      else if (err.code === 401 || err.code === 403) alert("Log in to use OCR.");
-      else alert("OCR failed: " + (err.body && err.body.error ? err.body.error : err.message));
+      if (err.code === 503) toast("OCR isn't configured on the server.", { type: "err" });
+      else if (err.code === 422) toast("Couldn't read a receipt — try a clearer photo or add it manually.", { type: "err" });
+      else if (err.code === 401 || err.code === 403) toast("Log in to use OCR.", { type: "err" });
+      else toast("OCR failed: " + (err.body && err.body.error ? err.body.error : err.message), { type: "err" });
     }
   });
 
   // ---------- login / logout ----------
   const loginDialog = $("#loginDialog");
-  $("#loginBtn").addEventListener("click", () => { $("#loginPassword").value = ""; $("#loginErr").textContent = ""; loginDialog.showModal(); });
-  $("#loginCancel").addEventListener("click", () => loginDialog.close());
+  $("#loginBtn").addEventListener("click", () => { $("#loginPassword").value = ""; clearErr(loginDialog); openDialog(loginDialog, "#loginPassword"); });
+  $("#loginCancel").addEventListener("click", () => closeDialog(loginDialog));
   $("#loginForm").addEventListener("submit", async (ev) => {
-    ev.preventDefault();
+    ev.preventDefault(); clearErr(loginDialog);
+    const btn = $("#loginSubmit"); busy(btn, true);
     try {
       await api("/login", { method: "POST", body: { password: $("#loginPassword").value } });
-      loginDialog.close();
-      admin = true; applyAdminUI();
+      closeDialog(loginDialog);
+      admin = true; applyAdminUI(); toast("Logged in", { type: "ok" });
       await refreshTrip();
     } catch (err) {
-      $("#loginErr").textContent = err.code === 429 ? "Too many attempts — wait a bit." : "Wrong password";
-    }
+      showErr($("#loginErr"), err.code === 429 ? "Too many attempts — wait a bit." : "Wrong password");
+      const card = loginDialog.querySelector(".dialog__form"); card.classList.remove("shake"); void card.offsetWidth; card.classList.add("shake");
+      $("#loginPassword").select();
+    } finally { busy(btn, false); }
   });
+  loginDialog.addEventListener("cancel", (ev) => { ev.preventDefault(); closeDialog(loginDialog); });
   $("#logoutBtn").addEventListener("click", async () => {
     try { await api("/logout", { method: "POST" }); } catch (_) {}
-    admin = false; applyAdminUI(); render();
+    admin = false; applyAdminUI(); render(); toast("Logged out", { type: "ok" });
   });
 
   function applyAdminUI() {
@@ -609,6 +937,14 @@
   }
 
   // ---------- export PDF ----------
+  function allOrExcept(ids) {
+    const all = doc.people.map((p) => p.id);
+    const set = new Set(ids);
+    if (ids.length === all.length && all.every((id) => set.has(id))) return "Everyone";
+    const missing = all.filter((id) => !set.has(id));
+    if (ids.length && missing.length && missing.length <= 2) return "Everyone except " + missing.map(pname).join(", ");
+    return ids.map(pname).join(", ");
+  }
   function buildReport() {
     const c = compute(); const transfers = settle(c.net);
     const stamp = new Date().toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -621,14 +957,14 @@
     }).join("");
     const expHtml = doc.expenses.map((e) => {
       const keys = Object.keys(e.shares || {}).filter((id) => personById[id]);
-      return `<tr><td>${esc(e.title)}</td><td class="num">${money(e.amount)}</td><td>paid by ${esc(pname(e.payerId))}</td><td>${esc(keys.map(pname).join(", ") || "—")}</td></tr>`;
+      return `<tr><td>${esc(e.title)}</td><td class="num">${money(e.amount)}</td><td>paid by ${esc(pname(e.payerId))}</td><td>${esc(allOrExcept(keys) || "—")}</td></tr>`;
     }).join("");
     const rcHtml = doc.receipts.slice().sort((a, b) => dateSortKey(a).localeCompare(dateSortKey(b))).map((rc) => {
       const grand = rc.grandTotal || sumItems(rc.items); const ratio = grand / (sumItems(rc.items) || 1);
       const rows = (rc.items || []).map((it) => {
         const sh = (it.sharedBy || []).filter((id) => personById[id]);
         const per = sh.length ? ((it.lineTotal || 0) * ratio) / sh.length : 0;
-        return `<tr><td>${esc(it.name)}${it.quantity > 1 ? " ×" + it.quantity : ""}</td><td class="num">${money(it.lineTotal || 0)}</td><td>${esc(sh.map(pname).join(", ") || "— unassigned —")}</td><td class="num">${sh.length ? money(per) + " ea" : ""}</td></tr>`;
+        return `<tr><td>${esc(it.name)}${it.quantity > 1 ? " ×" + it.quantity : ""}</td><td class="num">${money(it.lineTotal || 0)}</td><td>${esc(sh.length ? allOrExcept(sh) : "— unassigned —")}</td><td class="num">${sh.length ? money(per) + " ea" : ""}</td></tr>`;
       }).join("");
       return `<div class="rep-group"><div class="rep-group__head"><b>${esc(rc.title)}</b><span>${esc([fmtWhen(rc.date, rc.time), "paid by " + pname(rc.payerId), money(grand)].filter(Boolean).join(" · "))}</span></div><table class="rep-table"><tbody>${rows}</tbody></table></div>`;
     }).join("");
@@ -648,23 +984,41 @@
   }
   $("#exportBtn").addEventListener("click", () => { if (!doc) return; buildReport(); window.print(); });
 
-  // ---------- mobile sheet ----------
+  // ---------- mobile sheet (a11y: button FAB, aria-expanded, Esc, focus, inert) ----------
   const settleEl = $("#settle"); const fab = $("#settleFab");
   const scrim = document.createElement("div"); scrim.className = "scrim"; document.body.appendChild(scrim);
-  function toggleSheet() { const open = settleEl.classList.toggle("open"); scrim.classList.toggle("show", open); fab.classList.toggle("up", open); }
+  const inertEls = () => [$(".topbar"), $(".main-col")].filter(Boolean);
+  function sheetIsMobile() { return window.matchMedia("(max-width: 919px)").matches; }
+  function openSheet() {
+    settleEl.classList.add("open"); scrim.classList.add("show"); fab.classList.add("up");
+    fab.setAttribute("aria-expanded", "true");
+    if (sheetIsMobile()) {
+      settleEl.setAttribute("role", "dialog"); settleEl.setAttribute("aria-modal", "true");
+      inertEls().forEach((e) => e.setAttribute("inert", ""));
+      setTimeout(() => { const g = $("#sheetGrip"); if (g) g.focus(); }, 30);
+    }
+  }
+  function closeSheet() {
+    settleEl.classList.remove("open"); scrim.classList.remove("show"); fab.classList.remove("up");
+    fab.setAttribute("aria-expanded", "false");
+    settleEl.removeAttribute("role"); settleEl.removeAttribute("aria-modal");
+    inertEls().forEach((e) => e.removeAttribute("inert"));
+    if (sheetIsMobile()) fab.focus();
+  }
+  function toggleSheet() { settleEl.classList.contains("open") ? closeSheet() : openSheet(); }
   fab.addEventListener("click", toggleSheet);
-  fab.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleSheet(); } });
-  scrim.addEventListener("click", toggleSheet);
+  scrim.addEventListener("click", closeSheet);
   const grip = $("#sheetGrip");
-  if (grip) grip.addEventListener("click", () => { if (settleEl.classList.contains("open")) toggleSheet(); });
+  if (grip) grip.addEventListener("click", closeSheet);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && settleEl.classList.contains("open") && !document.querySelector("dialog[open]")) closeSheet(); });
   let touchY = null;
-  settleEl.addEventListener("touchstart", (e) => { touchY = e.touches[0].clientY; }, { passive: true });
+  settleEl.addEventListener("touchstart", (e) => { touchY = e.touches[0].clientY; sheetDragging = true; }, { passive: true });
   settleEl.addEventListener("touchmove", (e) => {
     if (touchY == null || !settleEl.classList.contains("open")) return;
     const inner = settleEl.querySelector(".settle__inner");
-    if (e.touches[0].clientY - touchY > 70 && inner && inner.scrollTop <= 0) { toggleSheet(); touchY = null; }
+    if (e.touches[0].clientY - touchY > 70 && inner && inner.scrollTop <= 0) { closeSheet(); touchY = null; }
   }, { passive: true });
-  settleEl.addEventListener("touchend", () => { touchY = null; });
+  settleEl.addEventListener("touchend", () => { touchY = null; sheetDragging = false; flushPending(); });
 
   // ---------- passcode gate ----------
   function lock(msg) {
@@ -676,7 +1030,21 @@
     setTimeout(() => $("#lockInput").focus(), 60);
   }
   function unlock() { $("#lock").hidden = true; }
-  $("#lockForm").addEventListener("submit", (e) => { e.preventDefault(); pass = $("#lockInput").value.trim(); tryLoad(); });
+  $("#lockForm").addEventListener("submit", (e) => { e.preventDefault(); const v = $("#lockInput").value.trim(); if (!v) return; pass = v; tryLoad(); });
+
+  // ---------- poll guard ----------
+  function flushPending() {
+    if (!pendingDoc) return;
+    if (inflight > 0 || document.querySelector("dialog[open]") || (sheetDragging)) return;
+    const d = pendingDoc; pendingDoc = null;
+    const y = window.scrollY; adoptDoc(d); render(); window.scrollTo(0, y);
+    toast("Updated — refreshed", { type: "ok", ms: 1800 });
+  }
+  function pollApply(d) {
+    if (!d || d.rev === (doc && doc.rev)) { setSync("live"); return; }
+    if (inflight > 0 || document.querySelector("dialog[open]") || sheetDragging) { pendingDoc = d; setSync("live"); return; }
+    const y = window.scrollY; adoptDoc(d); render(); window.scrollTo(0, y); setSync("live");
+  }
 
   // ---------- boot / polling ----------
   async function refreshTrip() {
@@ -705,7 +1073,7 @@
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(() => {
       if (document.hidden) return;
-      api("/trips/" + tripId).then((d) => { setSync("live"); if (d && d.rev !== (doc && doc.rev)) { adoptDoc(d); render(); } })
+      api("/trips/" + tripId).then((d) => pollApply(d))
         .catch((e) => { if (e.code === 401) lock("Enter passcode"); else setSync("offline"); });
     }, 4000);
   }
@@ -715,7 +1083,7 @@
     try { const me = await api("/me"); admin = !!me.admin; loginEnabled = !!me.loginEnabled; } catch (_) {}
     applyAdminUI();
     pass = localStorage.getItem(PASS_KEY) || "";
-    if (tripId) { const c = cacheLoad(); if (c) { adoptDoc(c); render(); } }
+    if (tripId) { const cc = cacheLoad(); if (cc) { adoptDoc(cc); render(); } }
     tryLoad();
   }
   boot();
