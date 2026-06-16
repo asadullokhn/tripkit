@@ -14,10 +14,18 @@ trip **itinerary** map. Vanilla JS front-end + a standard-library-only Go backen
 - **Fair splitting** — itemized receipts (tap who shared each line; tax/service allocated
   proportionally) + flat shared costs (even or weighted) + a manual debt/payment ledger.
 - **Minimal settlement** — greedy who-pays-whom, with a print-to-PDF report.
-- **Two access tiers** — a shared **passcode** to view; an **admin login** to edit.
-- **Receipt OCR (optional)** — upload a photo, an AI vision model drafts the receipt, you
-  confirm before saving. Provider is configurable.
-- **Itinerary** — an optional Leaflet map view at `/trip/`.
+- **Publish & track payments** — freeze the settlement as an official plan (it won't
+  reshuffle), record each person's **payout details**, let payers **upload a transfer
+  photo**, and have the **admin verify** each payment (pending → submitted → verified).
+- **Scales to 10+ people** — at ≤8 the classic inline chips; above that, collapsed avatar
+  stacks + a searchable person-picker, so big groups stay usable.
+- **Two access tiers** — a shared **passcode** (view + collaborative editing + payout
+  details + proof upload); an **admin login** (people, trips, publish/verify, OCR, AI).
+- **Receipt OCR (optional)** — upload a photo, a vision model drafts the receipt, you
+  confirm before saving. Needs an OpenAI-compatible **vision** model (DeepSeek is
+  text-only and can't read images — use e.g. Gemini Flash).
+- **AI itinerary (optional)** — per-trip day-by-day map; generate with a text LLM
+  (DeepSeek works well) then hand-edit. Stops can link to a shared cost.
 
 ## Routes
 

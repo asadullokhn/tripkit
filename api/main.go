@@ -96,6 +96,17 @@ func main() {
 	mux.HandleFunc("POST /api/trips/{id}/adjustments", requireEditor(handleAdjustmentPost))
 	mux.HandleFunc("DELETE /api/trips/{id}/adjustments/{aid}", requireEditor(handleAdjustmentDelete))
 
+	// bank account — editor tier (anyone with passcode sets their payout details)
+	mux.HandleFunc("PUT /api/trips/{id}/people/{pid}/bank", requireEditor(handlePersonBank))
+
+	// settlement plan — admin publishes/clears; payments tracked against it
+	mux.HandleFunc("PUT /api/trips/{id}/settlement", requireAdmin(handleSettlementPut))
+	mux.HandleFunc("DELETE /api/trips/{id}/settlement", requireAdmin(handleSettlementDelete))
+	mux.HandleFunc("POST /api/trips/{id}/settlement/{tid}/proof", requireEditor(handleProofUpload))
+	mux.HandleFunc("GET /api/trips/{id}/settlement/{tid}/proof", requirePasscode(handleProofGet))
+	mux.HandleFunc("POST /api/trips/{id}/settlement/{tid}/verify", requireAdmin(handleVerify))
+	mux.HandleFunc("POST /api/trips/{id}/settlement/{tid}/unverify", requireAdmin(handleUnverify))
+
 	// itinerary — editor tier to edit, admin to AI-generate / clear
 	mux.HandleFunc("PUT /api/trips/{id}/itinerary", requireEditor(handleItineraryPut))
 	mux.HandleFunc("DELETE /api/trips/{id}/itinerary", requireAdmin(handleItineraryDelete))

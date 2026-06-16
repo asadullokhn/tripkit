@@ -11,9 +11,10 @@ type Trip struct {
 }
 
 type Person struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Color string `json:"color,omitempty"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Color       string `json:"color,omitempty"`
+	BankAccount string `json:"bankAccount,omitempty"` // payout details (bank / e-wallet)
 }
 
 // A receipt line. sharedBy = the people who split this line EVENLY.
@@ -92,6 +93,25 @@ type Itinerary struct {
 	Days  []Day  `json:"days"`
 }
 
+// A planned payment in a published settlement. Status: pending → submitted → verified.
+type Transfer struct {
+	ID        string `json:"id"`
+	FromID    string `json:"fromId"`
+	ToID      string `json:"toId"`
+	Amount    int    `json:"amount"`
+	Status    string `json:"status"`             // pending | submitted | verified
+	ProofRef  string `json:"proofRef,omitempty"` // stored proof image filename
+	UpdatedAt string `json:"updatedAt,omitempty"`
+}
+
+// A frozen "who pays whom" plan (Plan A). Published once, then payments are tracked
+// against it without reshuffling. Recomputed only on an explicit re-generate.
+type Settlement struct {
+	Published   bool       `json:"published"`
+	GeneratedAt string     `json:"generatedAt,omitempty"`
+	Transfers   []Transfer `json:"transfers"`
+}
+
 // The whole trip document — one JSON file per trip.
 type TripDoc struct {
 	Trip        Trip         `json:"trip"`
@@ -100,6 +120,7 @@ type TripDoc struct {
 	Expenses    []Expense    `json:"expenses"`
 	Adjustments []Adjustment `json:"adjustments"`
 	Itinerary   *Itinerary   `json:"itinerary,omitempty"`
+	Settlement  *Settlement  `json:"settlement,omitempty"`
 	Rev         int          `json:"rev"`
 	UpdatedAt   string       `json:"updatedAt"`
 }

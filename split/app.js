@@ -423,6 +423,17 @@
       <span><span class="person__name">${esc(p.name)}</span>
         <span class="person__sub">had ${money(c.consumed[p.id])} · paid ${money(c.paid[p.id])}</span></span>
       <span class="person__net ${sign}">${money(Math.abs(n))}<small>${label}</small></span>`;
+    // payout / bank details (editor tier — anyone with passcode can set their own)
+    const mid = row.querySelector(".person__sub").parentNode;
+    const pay = document.createElement("span"); pay.className = "person__payout";
+    const val = personById[p.id] && personById[p.id].bankAccount;
+    pay.innerHTML = `<span class="person__payout-label">payout</span><span class="person__payout-val${val ? "" : " muted"}">${esc(val || "not set")}</span>`;
+    if (canEdit) {
+      const e = document.createElement("button"); e.type = "button"; e.className = "payout-edit";
+      e.setAttribute("aria-label", "Edit payout for " + p.name); e.innerHTML = `<span aria-hidden="true">✎</span>`;
+      e.addEventListener("click", () => openBank(p)); pay.appendChild(e);
+    }
+    mid.appendChild(pay);
     return row;
   }
 
@@ -465,9 +476,7 @@
       adjEl.appendChild(li);
     });
 
-    const transfers = settle(c.net);
-    fillTransfers($("#transfers"), transfers, false);
-    if ($("#finalTransfers")) fillTransfers($("#finalTransfers"), transfers, true);
+    renderSettlement(c); // #transfers, #finalTransfers, #settleAdmin, #planStale, #fabLabel (published plan vs live)
     const fn = $("#finalNote");
     if (fn) fn.textContent = c.unassignedCount
       ? `Note: ${c.unassignedCount} line${c.unassignedCount > 1 ? "s" : ""} (${money(c.unassignedTotal)}) still unassigned — assign them for an exact split.` : "";
@@ -477,8 +486,183 @@
     $("#progressLabel").textContent = `${c.assignedLines} of ${c.totalLines} lines assigned`;
     $("#unassignedNote").textContent = c.unassignedCount
       ? `${c.unassignedCount} line${c.unassignedCount > 1 ? "s" : ""} (${money(c.unassignedTotal)}) still unassigned — not included above.` : "";
-    $("#fabLabel").textContent = transfers.length ? `Settle up · ${transfers.length} payment${transfers.length > 1 ? "s" : ""}` : "All square";
   }
+
+  // ---------- settlement plan (publish / proof / verify) ----------
+  const txSig = (t) => [t.from || t.fromId, t.to || t.toId, t.amount];
+  const planSig = (list) => JSON.stringify(list.map(txSig).sort());
+  function statusBadge(st) {
+    const map = { pending: ["badge--pending", "pending"], submitted: ["badge--submitted", "proof uploaded"], verified: ["badge--verified", "✓ paid"] };
+    const [cls, label] = map[st] || map.pending;
+    return `<span class="badge ${cls}">${esc(label)}</span>`;
+  }
+  function renderSettlement(c) {
+    const live = settle(c.net);
+    const pub = doc.settlement && doc.settlement.published ? doc.settlement : null;
+    renderSettleAdmin(pub, live);
+    const planStale = $("#planStale");
+    if (pub) {
+      renderPlanCards($("#finalTransfers"), pub.transfers);
+      renderPlanMirror($("#transfers"), pub.transfers);
+      const liveAsPlan = live.map((t) => ({ fromId: t.from, toId: t.to, amount: t.amount }));
+      if (planStale) planStale.hidden = (planSig(live) === planSig(pub.transfers));
+      const pend = pub.transfers.filter((t) => t.status !== "verified").length;
+      $("#fabLabel").textContent = pend ? `Settle up · ${pend} to pay` : "All settled ✓";
+      void liveAsPlan;
+    } else {
+      fillTransfers($("#transfers"), live, false);
+      fillTransfers($("#finalTransfers"), live, true);
+      if (planStale) planStale.hidden = true;
+      $("#fabLabel").textContent = live.length ? `Settle up · ${live.length} payment${live.length > 1 ? "s" : ""}` : "All square";
+    }
+  }
+  function renderSettleAdmin(pub, live) {
+    const el = $("#settleAdmin"); if (!el) return; el.innerHTML = "";
+    if (!admin) return;
+    if (!pub) {
+      if (!live.length) return;
+      const b = document.createElement("button"); b.type = "button"; b.className = "solid-btn"; b.textContent = "Publish settlement plan";
+      b.addEventListener("click", publishSettlement); el.appendChild(b);
+    } else {
+      const rg = document.createElement("button"); rg.type = "button"; rg.className = "ghost-btn ghost-btn--sm"; rg.textContent = "Re-generate from balances";
+      rg.addEventListener("click", regenerateSettlement); el.appendChild(rg);
+      const un = document.createElement("button"); un.type = "button"; un.className = "ghost-btn ghost-btn--sm"; un.textContent = "Unpublish";
+      un.addEventListener("click", unpublishSettlement); el.appendChild(un);
+    }
+  }
+  function renderPlanCards(el, transfers) {
+    el.innerHTML = "";
+    if (!transfers.length) { el.innerHTML = `<li class="ftransfer empty">All square 🎉</li>`; return; }
+    transfers.forEach((t) => {
+      const payee = personById[t.toId];
+      const bank = payee && payee.bankAccount ? payee.bankAccount : "";
+      const li = document.createElement("li"); li.className = "plan-card status-" + (t.status || "pending");
+      li.setAttribute("aria-label", `${pname(t.fromId)} pays ${pname(t.toId)} ${money(t.amount)} — ${t.status || "pending"}`);
+
+      const top = document.createElement("div"); top.className = "plan-card__top";
+      top.innerHTML = `<span class="plan-who">
+          <span class="person__dot" style="--c:${pcol(t.fromId)}" aria-hidden="true"></span>
+          <b style="color:${pcol(t.fromId)}">${esc(pname(t.fromId))}</b>
+          <span class="ftransfer__verb" aria-hidden="true">pays</span>
+          <b style="color:${pcol(t.toId)}">${esc(pname(t.toId))}</b></span>
+        <span class="plan-amt">${money(t.amount)}</span>`;
+      li.appendChild(top);
+
+      const bankRow = document.createElement("div"); bankRow.className = "plan-bank";
+      if (bank) {
+        bankRow.innerHTML = `<span class="plan-bank__label">pay to</span><span class="plan-bank__val">${esc(bank)}</span>`;
+        const cp = document.createElement("button"); cp.type = "button"; cp.className = "copy-btn"; cp.setAttribute("aria-label", "Copy payout details"); cp.innerHTML = `<span aria-hidden="true">📋</span>`;
+        cp.addEventListener("click", () => copyText(bank, cp)); bankRow.appendChild(cp);
+      } else {
+        bankRow.innerHTML = `<span class="plan-bank__label">pay to</span><span class="plan-bank__val muted">${esc(pname(t.toId))} hasn’t added payout details</span>`;
+        if (payee && canEdit) { const add = document.createElement("button"); add.type = "button"; add.className = "link-btn"; add.textContent = "add"; add.addEventListener("click", () => openBank(payee)); bankRow.appendChild(add); }
+      }
+      li.appendChild(bankRow);
+
+      const foot = document.createElement("div"); foot.className = "plan-card__foot";
+      foot.innerHTML = statusBadge(t.status);
+      const acts = document.createElement("span"); acts.className = "plan-actions";
+      const up = document.createElement("button"); up.type = "button"; up.className = "mini-btn"; up.textContent = t.proofRef ? "Replace proof" : "Upload proof";
+      up.addEventListener("click", () => uploadProof(t.id)); acts.appendChild(up);
+      if (t.proofRef) { const vw = document.createElement("button"); vw.type = "button"; vw.className = "mini-btn"; vw.textContent = "View proof"; vw.addEventListener("click", () => openProof(t.id)); acts.appendChild(vw); }
+      if (admin) {
+        if (t.status === "verified") { const un = document.createElement("button"); un.type = "button"; un.className = "mini-btn"; un.textContent = "Unverify"; un.addEventListener("click", () => setVerify(t.id, false)); acts.appendChild(un); }
+        else { const vf = document.createElement("button"); vf.type = "button"; vf.className = "mini-btn verify-btn"; vf.textContent = "Verify"; vf.addEventListener("click", () => setVerify(t.id, true)); acts.appendChild(vf); }
+      }
+      foot.appendChild(acts); li.appendChild(foot);
+      el.appendChild(li);
+    });
+  }
+  function renderPlanMirror(el, transfers) {
+    el.innerHTML = "";
+    if (!transfers.length) { el.innerHTML = `<li class="transfer empty">All square 🎉</li>`; return; }
+    transfers.forEach((t) => {
+      const li = document.createElement("li"); li.className = "transfer transfer--plan";
+      li.setAttribute("aria-label", `${pname(t.fromId)} pays ${pname(t.toId)} ${money(t.amount)} — ${t.status || "pending"}`);
+      li.innerHTML = `<b style="color:${pcol(t.fromId)}">${esc(pname(t.fromId))}</b>
+        <span class="arrow" aria-hidden="true">→</span><b style="color:${pcol(t.toId)}">${esc(pname(t.toId))}</b>
+        ${statusBadge(t.status)}<span class="amt">${money(t.amount)}</span>`;
+      el.appendChild(li);
+    });
+  }
+  async function publishSettlement() {
+    const live = settle(compute().net);
+    if (!live.length) { toast("Nothing to settle", { type: "err" }); return; }
+    const ok = await confirmAsk({ title: "Publish settlement plan?", okLabel: "Publish",
+      body: "This freezes the current “who pays whom” as the official plan. Friends pay against it, and recording payments won’t reshuffle it." });
+    if (!ok) return;
+    const transfers = live.map((t) => ({ fromId: t.from, toId: t.to, amount: t.amount }));
+    pushDoc(api(`/trips/${tripId}/settlement`, { method: "PUT", body: { transfers } }), { okMsg: "Settlement published" });
+  }
+  async function regenerateSettlement() {
+    const live = settle(compute().net);
+    const ok = await confirmAsk({ title: "Re-generate the plan?", danger: true, okLabel: "Re-generate",
+      body: "Recompute who-pays-whom from current balances. Unchanged transfers keep their proof and verified status; changed ones reset." });
+    if (!ok) return;
+    const transfers = live.map((t) => ({ fromId: t.from, toId: t.to, amount: t.amount }));
+    pushDoc(api(`/trips/${tripId}/settlement`, { method: "PUT", body: { transfers } }), { okMsg: "Plan re-generated" });
+  }
+  async function unpublishSettlement() {
+    const ok = await confirmAsk({ title: "Unpublish the plan?", danger: true, okLabel: "Unpublish",
+      body: "Settlement goes back to live auto-calculation. Uploaded proofs and verifications on the plan are discarded." });
+    if (!ok) return;
+    pushDoc(api(`/trips/${tripId}/settlement`, { method: "DELETE" }), { okMsg: "Plan unpublished" });
+  }
+  function setVerify(tid, on) {
+    pushDoc(api(`/trips/${tripId}/settlement/${tid}/${on ? "verify" : "unverify"}`, { method: "POST" }), { okMsg: on ? "Verified ✓" : "Re-opened" });
+  }
+  // proof upload (shared hidden input; editor tier)
+  let proofTid = null;
+  function uploadProof(tid) { proofTid = tid; $("#proofFile").click(); }
+  $("#proofFile").addEventListener("change", (e) => {
+    const file = e.target.files && e.target.files[0]; e.target.value = "";
+    if (!file || !proofTid) return;
+    const tid = proofTid; proofTid = null;
+    showSpinner("Uploading proof…");
+    const fd = new FormData(); fd.append("image", file);
+    pushDoc(api(`/trips/${tripId}/settlement/${tid}/proof`, { method: "POST", body: fd }), { okMsg: "Proof uploaded", errMsg: "Upload failed — try a smaller jpg/png" })
+      .catch(() => {}).finally(() => hideSpinner());
+  });
+  function showSpinner(msg) { const s = $("#ocrSpinner"); if (!s) return; const sp = s.querySelector("span"); if (sp) sp.textContent = msg || "Working…"; s.hidden = false; }
+  function hideSpinner() { const s = $("#ocrSpinner"); if (s) s.hidden = true; }
+  // proof lightbox
+  function openProof(tid) {
+    const img = $("#lightboxImg");
+    img.src = `${API}/trips/${tripId}/settlement/${tid}/proof?pass=${encodeURIComponent(pass)}`;
+    $("#lightbox").hidden = false;
+  }
+  function closeLightbox() { $("#lightbox").hidden = true; $("#lightboxImg").src = ""; }
+  $("#lightbox").addEventListener("click", closeLightbox);
+  $("#lightboxClose").addEventListener("click", closeLightbox);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#lightbox").hidden) closeLightbox(); });
+  // copy to clipboard
+  function copyText(text, btn) {
+    const done = () => { if (btn) { const o = btn.innerHTML; btn.innerHTML = `<span aria-hidden="true">✓</span>`; setTimeout(() => { btn.innerHTML = o; }, 1200); } toast("Copied", { type: "ok", ms: 1200 }); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+    else fallbackCopy(text, done);
+  }
+  function fallbackCopy(text, done) {
+    try { const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand("copy"); ta.remove(); done(); }
+    catch (_) { toast("Couldn't copy", { type: "err" }); }
+  }
+  // bank/payout dialog (editor tier)
+  const bankDialog = $("#bankDialog");
+  let bankPid = null;
+  function openBank(p) {
+    if (!p) return; bankPid = p.id;
+    $("#bankTitle").textContent = "Payout details — " + p.name;
+    $("#bankInput").value = p.bankAccount || "";
+    clearErr(bankDialog); openDialog(bankDialog, "#bankInput");
+  }
+  $("#bankCancel").addEventListener("click", () => closeDialog(bankDialog));
+  bankDialog.addEventListener("cancel", (ev) => { ev.preventDefault(); closeDialog(bankDialog); });
+  $("#bankForm").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    if (!bankPid) return;
+    const v = $("#bankInput").value.trim(); const btn = $("#bankSave"); busy(btn, true);
+    pushDoc(api(`/trips/${tripId}/people/${bankPid}/bank`, { method: "PUT", body: { bankAccount: v } }), { okMsg: "Payout saved" })
+      .then(() => closeDialog(bankDialog)).catch(() => {}).finally(() => busy(btn, false));
+  });
 
   function render() {
     if (!doc) return;

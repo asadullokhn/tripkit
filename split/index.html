@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Hanken+Grotesque:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=14" />
+  <link rel="stylesheet" href="styles.css?v=15" />
 </head>
 <body>
   <div class="grain" aria-hidden="true"></div>
@@ -80,8 +80,10 @@
 
       <section class="block final" aria-label="Final settlement">
         <h2 class="block__title">Final settlement <span class="block__hint">who pays whom</span></h2>
+        <p class="plan-stale" id="planStale" hidden>⚠ Balances changed since publishing — re-generate to update the plan.</p>
         <ul id="finalTransfers" class="final__list" aria-live="polite"></ul>
         <p class="final__foot" id="finalNote"></p>
+        <div class="settle-admin" id="settleAdmin"></div>
       </section>
     </div>
 
@@ -260,9 +262,30 @@
     </div>
   </dialog>
 
+  <!-- proof of payment: shared upload input + lightbox viewer -->
+  <input type="file" id="proofFile" accept="image/jpeg,image/png,image/webp" hidden />
+  <div class="lightbox" id="lightbox" hidden>
+    <button class="lightbox__close" id="lightboxClose" type="button" aria-label="Close">✕</button>
+    <img id="lightboxImg" alt="Payment proof" />
+  </div>
+
+  <!-- payout / bank details dialog -->
+  <dialog id="bankDialog" class="dialog" aria-labelledby="bankTitle">
+    <form class="dialog__form" id="bankForm">
+      <h3 class="dialog__title" id="bankTitle">Payout details</h3>
+      <label class="field"><span>Bank / e-wallet account</span>
+        <input id="bankInput" type="text" maxlength="200" placeholder="e.g. BCA 1234567890 a/n Name" /></label>
+      <p class="field__err" id="bankErr" role="alert" hidden></p>
+      <div class="dialog__actions">
+        <button type="button" class="ghost-btn" id="bankCancel">Cancel</button>
+        <button type="submit" class="solid-btn" id="bankSave">Save</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- print-only report -->
   <div id="report" class="report" aria-hidden="true"></div>
 
-  <script src="app.js?v=14"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>
