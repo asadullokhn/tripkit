@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d1b1e" />
+  <title>Split the Bill</title>
+  <meta name="description" content="Split a trip's restaurant bills and shared costs — who pays whom." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Hanken+Grotesque:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css?v=12" />
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <!-- passcode gate -->
+  <div class="lock" id="lock" hidden>
+    <form class="lock__card" id="lockForm">
+      <span class="lock__kicker">Split the Bill</span>
+      <h2 class="lock__title">Enter passcode</h2>
+      <input id="lockInput" class="lock__input" type="password" inputmode="numeric"
+             pattern="[0-9]*" maxlength="32" autocomplete="off" placeholder="••••" aria-label="Passcode" />
+      <p class="lock__err" id="lockErr" role="alert"></p>
+      <button type="submit" class="solid-btn">Unlock</button>
+    </form>
+  </div>
+
+  <header class="topbar">
+    <div class="topbar__inner">
+      <div class="brand">
+        <a class="brand__kicker brand__home" href="/">← Bali Trip</a>
+        <h1 class="brand__title" id="tripName">Split&nbsp;the&nbsp;Bill</h1>
+      </div>
+      <div class="topbar__actions">
+        <span class="sync" id="sync" title="Sync status"><span class="sync__dot"></span><span id="syncLabel">syncing…</span></span>
+        <button id="loginBtn" class="ghost-btn" type="button" title="Log in to edit" hidden>Log in</button>
+        <button id="logoutBtn" class="ghost-btn admin-only" type="button" title="Log out">Log out</button>
+        <button id="exportBtn" class="ghost-btn" type="button" title="Export PDF">Export PDF</button>
+      </div>
+    </div>
+    <div class="progress" id="progress">
+      <div class="progress__bar"><span id="progressFill"></span></div>
+      <span class="progress__label" id="progressLabel">0 of 0 items assigned</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <div class="main-col">
+      <section class="block" aria-label="People">
+        <h2 class="block__title">People
+          <span class="block__hint">in this trip</span>
+          <button id="addPersonBtn" class="ghost-btn ghost-btn--sm admin-only" type="button">+ Person</button>
+        </h2>
+        <div class="people-bar" id="peopleBar"></div>
+      </section>
+
+      <section class="block" aria-label="Shared trip costs">
+        <h2 class="block__title">Shared trip costs
+          <span class="block__hint">split among those tapped</span>
+          <button id="addExpenseBtn" class="ghost-btn ghost-btn--sm" type="button">+ Cost</button>
+        </h2>
+        <div class="shared" id="shared"></div>
+      </section>
+
+      <section class="block" aria-label="Restaurant receipts">
+        <h2 class="block__title">Receipts
+          <span class="block__hint">tap who shared each item</span>
+          <span class="block__actions">
+            <button id="ocrBtn" class="ghost-btn ghost-btn--sm admin-only" type="button" title="Add receipt from a photo">📷 Photo</button>
+            <button id="addReceiptBtn" class="ghost-btn ghost-btn--sm" type="button">+ Receipt</button>
+          </span>
+        </h2>
+        <p class="ocr-privacy admin-only" id="ocrPrivacy">📷 sends the photo to the configured AI provider for OCR.</p>
+        <div class="receipts" id="receipts"></div>
+      </section>
+
+      <section class="block final" aria-label="Final settlement">
+        <h2 class="block__title">Final settlement <span class="block__hint">who pays whom</span></h2>
+        <ul id="finalTransfers" class="final__list"></ul>
+        <p class="final__foot" id="finalNote"></p>
+      </section>
+    </div>
+
+    <aside class="settle" id="settle" aria-label="Settle up">
+      <div class="settle__inner">
+        <button class="sheet-grip" id="sheetGrip" type="button" aria-label="Close settle up"></button>
+        <h2 class="settle__title">Settle up</h2>
+        <div id="people" class="people"></div>
+
+        <div class="adjust">
+          <div class="adjust__head">
+            <h3>Manual adjustments</h3>
+            <button id="addAdjustBtn" class="ghost-btn ghost-btn--sm" type="button">+ Add</button>
+          </div>
+          <ul id="adjustList" class="adjust__list"></ul>
+        </div>
+
+        <div class="transfers">
+          <h3>Who pays whom</h3>
+          <ul id="transfers" class="transfers__list"></ul>
+        </div>
+
+        <p class="settle__foot" id="unassignedNote"></p>
+      </div>
+    </aside>
+  </main>
+
+  <div class="settle-fab" id="settleFab" role="button" tabindex="0" aria-label="Show settle up">
+    <span id="fabLabel">Settle up</span>
+    <span class="settle-fab__chevron">▾</span>
+  </div>
+
+  <!-- hidden file input for OCR -->
+  <input type="file" id="ocrFile" accept="image/jpeg,image/png,image/webp" hidden />
+  <div class="spinner-overlay" id="ocrSpinner" hidden>
+    <div class="spinner"></div><span>Reading receipt…</span>
+  </div>
+
+  <!-- login dialog -->
+  <dialog id="loginDialog" class="dialog">
+    <form method="dialog" class="dialog__form" id="loginForm">
+      <h3 class="dialog__title">Log in to edit</h3>
+      <label class="field"><span>Admin password</span>
+        <input id="loginPassword" type="password" autocomplete="current-password" required />
+      </label>
+      <p class="lock__err" id="loginErr"></p>
+      <div class="dialog__actions">
+        <button type="button" class="ghost-btn" id="loginCancel">Cancel</button>
+        <button type="submit" class="solid-btn">Log in</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- person dialog -->
+  <dialog id="personDialog" class="dialog">
+    <form method="dialog" class="dialog__form" id="personForm">
+      <h3 class="dialog__title" id="pnTitle">Add person</h3>
+      <label class="field"><span>Name</span><input id="pnName" type="text" maxlength="40" required /></label>
+      <div class="field"><span>Colour</span><div class="swatches" id="pnSwatches"></div></div>
+      <div class="dialog__actions">
+        <button type="button" class="ghost-btn danger admin-only" id="pnDelete" hidden>Delete</button>
+        <span style="flex:1"></span>
+        <button type="button" class="ghost-btn" id="pnCancel">Cancel</button>
+        <button type="submit" class="solid-btn">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- receipt dialog (also used for OCR draft confirm) -->
+  <dialog id="receiptDialog" class="dialog dialog--wide">
+    <form method="dialog" class="dialog__form" id="receiptForm">
+      <h3 class="dialog__title" id="rcTitle">Add receipt</h3>
+      <p class="rc-warnings" id="rcWarnings" hidden></p>
+      <div class="field-row">
+        <label class="field"><span>Title</span><input id="rcName" type="text" maxlength="60" required /></label>
+        <label class="field"><span>Date</span><input id="rcDate" type="date" /></label>
+      </div>
+      <label class="field"><span>Paid by</span><select id="rcPayer"></select></label>
+      <div class="field"><span>Items</span><div class="rc-items" id="rcItems"></div>
+        <button type="button" class="ghost-btn ghost-btn--sm" id="rcAddItem">+ Item</button>
+      </div>
+      <label class="field"><span>Grand total (incl. tax/service) — 0 = sum of items</span>
+        <input id="rcGrand" type="number" min="0" step="1" inputmode="numeric" value="0" /></label>
+      <div class="dialog__actions">
+        <button type="button" class="ghost-btn danger" id="rcDelete" hidden>Delete</button>
+        <span style="flex:1"></span>
+        <button type="button" class="ghost-btn" id="rcCancel">Cancel</button>
+        <button type="submit" class="solid-btn">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- expense (shared cost) dialog -->
+  <dialog id="expenseDialog" class="dialog">
+    <form method="dialog" class="dialog__form" id="expenseForm">
+      <h3 class="dialog__title" id="exTitle">Add shared cost</h3>
+      <label class="field"><span>Title</span><input id="exName" type="text" maxlength="60" required /></label>
+      <div class="field-row">
+        <label class="field"><span>Amount</span><input id="exAmount" type="number" min="0" step="1" inputmode="numeric" required /></label>
+        <label class="field"><span>Paid by</span><select id="exPayer"></select></label>
+      </div>
+      <div class="field"><span>Split</span>
+        <div class="seg seg--4" id="exSplitMode">
+          <button type="button" class="seg__btn is-on" data-mode="EVENLY">Evenly</button>
+          <button type="button" class="seg__btn" data-mode="BY_SHARES">Shares</button>
+          <button type="button" class="seg__btn" data-mode="BY_PERCENTAGE">%</button>
+          <button type="button" class="seg__btn" data-mode="BY_AMOUNT">Amount</button>
+        </div>
+      </div>
+      <div class="field"><span id="exPartLabel">Shared by</span><div class="ex-parts" id="exParts"></div></div>
+      <div class="dialog__actions">
+        <button type="button" class="ghost-btn danger" id="exDelete" hidden>Delete</button>
+        <span style="flex:1"></span>
+        <button type="button" class="ghost-btn" id="exCancel">Cancel</button>
+        <button type="submit" class="solid-btn">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- adjustment dialog -->
+  <dialog id="adjustDialog" class="dialog">
+    <form method="dialog" class="dialog__form" id="adjustForm">
+      <h3 class="dialog__title">Add adjustment</h3>
+      <div class="field"><span>Type</span>
+        <div class="seg" id="adjKind">
+          <button type="button" class="seg__btn is-on" data-kind="debt">Owes (extra debt)</button>
+          <button type="button" class="seg__btn" data-kind="payment">Already paid</button>
+        </div>
+      </div>
+      <label class="field"><span id="adjFromLabel">Who owes</span><select id="adjFrom" required></select></label>
+      <label class="field"><span>To (receives)</span><select id="adjTo" required></select></label>
+      <label class="field"><span>Amount</span><input id="adjAmount" type="number" min="0" step="1" inputmode="numeric" required /></label>
+      <label class="field"><span>Label</span><input id="adjLabel" type="text" maxlength="60" placeholder="e.g. e-scooter rental" /></label>
+      <div class="dialog__actions">
+        <button type="button" class="ghost-btn" id="adjCancel">Cancel</button>
+        <button type="submit" class="solid-btn">Add</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- print-only report -->
+  <div id="report" class="report" aria-hidden="true"></div>
+
+  <script src="app.js?v=12"></script>
+</body>
+</html>

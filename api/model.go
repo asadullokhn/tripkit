@@ -1,0 +1,126 @@
+package main
+
+// All money values are integer minor units (for IDR that is just whole rupiah).
+
+type Trip struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	BaseCurrency string `json:"baseCurrency"`
+	Info         string `json:"info,omitempty"`
+	CreatedAt    string `json:"createdAt"`
+}
+
+type Person struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Color string `json:"color,omitempty"`
+}
+
+// A receipt line. sharedBy = the people who split this line EVENLY.
+type Item struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Quantity    int      `json:"quantity"`
+	UnitPrice   int      `json:"unitPrice"`
+	LineTotal   int      `json:"lineTotal"`
+	SharedBy    []string `json:"sharedBy"`
+	NeedsReview bool     `json:"needsReview,omitempty"`
+	Note        string   `json:"note,omitempty"`
+}
+
+// An itemized restaurant/store bill.
+type Receipt struct {
+	ID         string `json:"id"`
+	Title      string `json:"title"`
+	Sub        string `json:"sub,omitempty"`
+	Date       string `json:"date,omitempty"`
+	Time       string `json:"time,omitempty"`
+	PayerID    string `json:"payerId"`
+	Items      []Item `json:"items"`
+	GrandTotal int    `json:"grandTotal"` // 0 -> derive from line totals
+	ImageRef   string `json:"imageRef,omitempty"`
+}
+
+// A flat shared trip cost (villa, petrol, tickets...). shares interpret per splitMode.
+type Expense struct {
+	ID        string         `json:"id"`
+	Title     string         `json:"title"`
+	Amount    int            `json:"amount"`
+	PayerID   string         `json:"payerId"`
+	SplitMode string         `json:"splitMode"` // EVENLY | BY_SHARES | BY_PERCENTAGE | BY_AMOUNT
+	Shares    map[string]int `json:"shares"`    // personId -> weight/percent/amount (per splitMode)
+	Note      string         `json:"note,omitempty"`
+}
+
+// Manual ledger entry. kind: "debt" (from owes to) | "payment" (from already paid to).
+type Adjustment struct {
+	ID     string `json:"id"`
+	Kind   string `json:"kind"`
+	FromID string `json:"fromId"`
+	ToID   string `json:"toId"`
+	Amount int    `json:"amount"`
+	Label  string `json:"label,omitempty"`
+}
+
+// The whole trip document — one JSON file per trip.
+type TripDoc struct {
+	Trip        Trip         `json:"trip"`
+	People      []Person     `json:"people"`
+	Receipts    []Receipt    `json:"receipts"`
+	Expenses    []Expense    `json:"expenses"`
+	Adjustments []Adjustment `json:"adjustments"`
+	Rev         int          `json:"rev"`
+	UpdatedAt   string       `json:"updatedAt"`
+}
+
+// Cheap summary for the trip list.
+type TripSummary struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	BaseCurrency string `json:"baseCurrency"`
+	CreatedAt    string `json:"createdAt"`
+	People       int    `json:"people"`
+	Receipts     int    `json:"receipts"`
+	Expenses     int    `json:"expenses"`
+}
+
+func (d *TripDoc) summary() TripSummary {
+	return TripSummary{
+		ID: d.Trip.ID, Name: d.Trip.Name, BaseCurrency: d.Trip.BaseCurrency,
+		CreatedAt: d.Trip.CreatedAt, People: len(d.People),
+		Receipts: len(d.Receipts), Expenses: len(d.Expenses),
+	}
+}
+
+func (d *TripDoc) normalize() {
+	if d.People == nil {
+		d.People = []Person{}
+	}
+	if d.Receipts == nil {
+		d.Receipts = []Receipt{}
+	}
+	if d.Expenses == nil {
+		d.Expenses = []Expense{}
+	}
+	if d.Adjustments == nil {
+		d.Adjustments = []Adjustment{}
+	}
+	for i := range d.Receipts {
+		if d.Receipts[i].Items == nil {
+			d.Receipts[i].Items = []Item{}
+		}
+		for j := range d.Receipts[i].Items {
+			if d.Receipts[i].Items[j].SharedBy == nil {
+				d.Receipts[i].Items[j].SharedBy = []string{}
+			}
+		}
+	}
+	for i := range d.Expenses {
+		if d.Expenses[i].Shares == nil {
+			d.Expenses[i].Shares = map[string]int{}
+		}
+		if d.Expenses[i].SplitMode == "" {
+			d.Expenses[i].SplitMode = "EVENLY"
+		}
+	}
+}

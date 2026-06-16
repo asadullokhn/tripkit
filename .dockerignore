@@ -1,0 +1,11 @@
+Dockerfile
+.dockerignore
+docker-compose.yml
+.git
+.gitignore
+.env
+.playwright-mcp
+.superpowers
+*.md
+api
+backups

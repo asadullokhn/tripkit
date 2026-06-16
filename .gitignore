@@ -1,0 +1,14 @@
+.DS_Store
+*.log
+.env
+.playwright-mcp/
+.superpowers/
+
+# never commit real trip data — it lives only on the data volume
+backups/
+state*.json
+data/
+
+# local screenshots / scratch
+*.jpeg
+*.png

@@ -1,0 +1,577 @@
+{
+  "trip": {
+    "title": "Bali Highlands Ride",
+    "tagline": "Highlands & Waterfalls",
+    "eyebrow": "Bali · 3-day motorbike ride",
+    "startDate": "2026-06-13",
+    "endDate": "2026-06-15",
+    "datesLabel": "Sat 13 – Mon 15 June 2026",
+    "riders": 6,
+    "travelMode": "motorbike",
+    "currency": "IDR (k = thousand rupiah)",
+    "baseHotel": "Bedugul Asri Village",
+    "nights": 2,
+    "note": "Day 2 keeps the western Munduk cluster + Lovina; the northern Sekumpul trek was dropped to keep the day realistic for 6 riders. Times other than Day-1 departure are intentionally omitted."
+  },
+  "design": {
+    "fonts": {
+      "display": "Bricolage Grotesque",
+      "body": "Inter",
+      "source": "Google Fonts"
+    },
+    "palette": {
+      "ink": "#14231b",
+      "paper": "#f4f3ea",
+      "panel": "#fffdf7",
+      "line": "#e4e3d6",
+      "muted": "#5c6b5f",
+      "accent": "#e0723a"
+    },
+    "dayColors": {
+      "day1": "#2f7d54",
+      "day2": "#0f95a3",
+      "day3": "#e0723a"
+    },
+    "badgeConvention": "Numbers = sights; icons = logistics (S = start, ⛽ = fuel/meet-up, 🏨 = hotel, 🏖️ = beach, 🏁 = finish)."
+  },
+  "map": {
+    "center": [
+      -8.42,
+      115.13
+    ],
+    "zoom": 11,
+    "maxZoom": 19,
+    "tileUrl": "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    "tileSubdomains": "abcd",
+    "tileAttribution": "© OpenStreetMap · © CARTO",
+    "library": "Leaflet 1.9.4"
+  },
+  "googleMaps": {
+    "searchUrlTemplate": "https://www.google.com/maps/search/?api=1&query={lat},{lng}",
+    "directionsBase": "https://www.google.com/maps/dir/"
+  },
+  "legend": [
+    {
+      "day": 1,
+      "label": "Day 1",
+      "color": "#2f7d54"
+    },
+    {
+      "day": 2,
+      "label": "Day 2",
+      "color": "#0f95a3"
+    },
+    {
+      "day": 3,
+      "label": "Day 3",
+      "color": "#e0723a"
+    }
+  ],
+  "days": [
+    {
+      "number": 1,
+      "label": "Day 1",
+      "weekday": "Saturday",
+      "date": "2026-06-13",
+      "dateLabel": "Sat 13 Jun",
+      "title": "Tuban → Bedugul",
+      "color": "#2f7d54",
+      "routeUrl": "https://www.google.com/maps/dir/-8.7374945,115.1770982/-8.544474,115.2142638/-8.3297697,115.2293907/-8.2633689,115.1811978/-8.2761215,115.1542029/-8.2688315,115.1666525/-8.2620814,115.1626348",
+      "routeWaypoints": [
+        [
+          -8.7374945,
+          115.1770982
+        ],
+        [
+          -8.544474,
+          115.2142638
+        ],
+        [
+          -8.3297697,
+          115.2293907
+        ],
+        [
+          -8.2633689,
+          115.1811978
+        ],
+        [
+          -8.2761215,
+          115.1542029
+        ],
+        [
+          -8.2688315,
+          115.1666525
+        ],
+        [
+          -8.2620814,
+          115.1626348
+        ]
+      ],
+      "stops": [
+        {
+          "order": 1,
+          "type": "start",
+          "badge": "S",
+          "name": "Tuban — start (Jl. Kediri)",
+          "note": "Roll out 08:30. Fuel up before leaving town if you can.",
+          "lat": -8.7374945,
+          "lng": 115.1770982,
+          "googleMapsSearchUrl": "https://www.google.com/maps/search/?api=1&query=-8.7374945,115.1770982",
+          "departTime": "08:30",
+          "place": {
+            "placeId": null,
+            "address": "Jl. Kediri, Tuban, Kec. Kuta, Kabupaten Badung, Bali 80361",
+            "rating": null,
+            "ratingCount": null,
+            "hours": null,
+            "phone": null,
+            "website": null,
+            "priceLevel": null,
+            "googleMapsPlaceUrl": null
+          }
+        },
+        {
+          "order": 2,
+          "type": "fuel",
+          "badge": "⛽",
+          "name": "Fuel + minimart (Abiansemal)",
+          "note": "Meet-up & refuel point for all 6. Minimart, open 24h.",
+          "lat": -8.544474,
+          "lng": 115.2142638,
+          "googleMapsSearchUrl": "https://www.google.com/maps/search/?api=1&query=-8.544474,115.2142638",
+          "place": {
+            "placeId": "ChIJF7jojUE80i0R36mcWvfq9j4",
+            "address": "SPBU Latu Abiansemal, Jl. Raya Mambal, Abiansemal, Kec. Abiansemal, Kabupaten Badung, Bali 80352",
+            "rating": 4.1,
+            "ratingCount": 556,
+            "hours": "Open 24 hours",
+            "phone": "+62 21 46586577",
+            "website": "http://www.pertamina.co.id/",
+            "priceLevel": null,
+            "googleMapsPlaceUrl": "https://maps.google.com/?cid=4537072022720391647"
+          }
+        },
+        {
+          "order": 3,
+          "type": "waterfall",
+          "badge": "1",
+          "name": "Nungnung Waterfall",
+          "note": "Entry ~15–20k/person. ~500 steps down & up — you can swim.",
+          "lat": -8.3297697,
+          "lng": 115.2293907,
+          "googleMapsSearchUrl": "https://www.google.com/maps/search/?api=1&query=-8.3297697,115.2293907",
+          "place": {
+            "placeId": "ChIJ4xDIw4Mg0i0RGOMipIV42Io",
+            "address": "Nungnung Waterfall, Belok/Sidan, Petang, Badung Regency, Bali",
+            "rating": 4.8,
+            "ratingCount": 954,
+            "hours": null,
+            "phone": null,
+            "website": null,
+            "priceLevel": null,
+            "googleMapsPlaceUrl": "https://maps.google.com/?cid=10004879087583290136"
+          }
+        },
+        {
+          "order": 4,
+          "type": "strawberry",
+          "badge": "2",
+          "name": "Joko Strawberry",
+          "note": "Pick your own by Lake Beratan, ~50k/kg + a fresh juice.",
+          "lat": -8.2633689,
+          "lng": 115.1811978,
+          "googleMapsSearchUrl": "https://www.google.com/maps/search/?api=1&query=-8.2633689,115.1811978",
+          "place": {
+            "placeId": "ChIJB0xQhBqJ0S0Rch5YnPkLweg",
+            "address": "P5PJ+MF4 Beratan lake, Jl. Mawar 2, Bedugul, Candikuning, Kec. Baturiti, Kabupaten Tabanan, Bali",
+            "rating": 4.7,
+            "ratingCount": 40,
+            "hours": "Daily 07:00–20:00",
+            "phone": "+62 812-3640-2981",
+            "website": null,
+            "priceLevel": null,
+            "googleMapsPlaceUrl": "https://maps.google.com/?cid=16771699654002220658"
+          }
+        },
+        {
+          "order": 5,
+          "type": "garden",
+          "badge": "3",
+          "name": "Bali Botanical Garden",
+          "note": "Orchids and cool air. Golf carts available for the group.",
+          "lat": -8.2761215,
+          "lng": 115.1542029,
+          "googleMapsSearchUrl": "https://www.google.com/maps/search/?api=1&query=-8.2761215,115.1542029",
+          "place": {
+            "placeId": "ChIJDSEiPAyJ0S0RxX3GamOTQ4k",
+            "address": "Kebun Raya Bali, Candikuning, Baturiti, Tabanan Regency, Bali",
+            "rating": 4.6,
+            "ratingCount": 18210,
+            "hours": "Mon–Fri 08:00–16:00 · Sat–Sun 08:00–17:00",
+            "phone": "+62 368 2033211",
+            "website": "https://kebunraya.id/bali",
+            "priceLevel": null,
+            "googleMapsPlaceUrl": "https://maps.google.com/?cid=9890911261838179781"
+          }
+        },
+        {
+          "order": 6,
+          "type": "viewpoint",
+          "badge": "4",
+          "name": "Lake Beratan viewpoint",
+          "note": "Lake views and photos before the hotel.",
+          "lat": -8.2688315,
+          "lng": 115.1666525,
+          "googleMapsSearchUrl": "https://www.google.com/maps/search/?api=1&query=-8.2688315,115.1666525",
+          "place": {
+            "placeId": "ChIJRfoSQwCJ0S0Ra8fGVUEh8yY",
+            "address": "P5H7+8CG, Jl. Raya Bedugul, Candikuning, Kec. Baturiti, Kabupaten Tabanan, Bali",
+            "rating": 4.8,
+            "ratingCount": 393,
+            "hours": null,
+            "phone": null,
+            "website": null,
+            "priceLevel": null,
+            "googleMapsPlaceUrl": "https://maps.google.com/?cid=2806623557277632363"
+          }
+        },
+        {
+          "order": 7,
+          "type": "hotel",
+          "badge": "🏨",
+          "name": "Bedugul Asri Village (hotel)",
+          "note": "Check in, dinner. Base for 2 nights. Bring a jacket — evenings 15–18°C.",
+          "lat": -8.2620814,
+          "lng": 115.1626348,
+          "googleMapsSearchUrl": "https://www.google.com/maps/search/?api=1&query=-8.2620814,115.1626348",
+          "place": {
+            "placeId": "ChIJVeSJ7iyJ0S0RwZ3ut8UAIbI",
+            "address": "Jl. Raya Bedugul, Candikuning, Kec. Baturiti, Kabupaten Tabanan, Bali 82191",
+            "rating": 4.8,
+            "ratingCount": 1249,
+            "hours": "Reception 24 hours",
+            "phone": "+62 811-3810-8000",
+            "website": "https://dusunbedugulasri.com/",
+            "priceLevel": null,
+            "googleMapsPlaceUrl": "https://maps.google.com/?cid=12835541262177050049"
+          }
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "label": "Day 2",
+      "weekday": "Sunday",
+      "date": "2026-06-14",
+      "dateLabel": "Sun 14 Jun",
+      "title": "Munduk jungle + Lovina",
+      "color": "#0f95a3",
+      "routeUrl": "https://www.google.com/maps/dir/-8.2620814,115.1626348/-8.2171873,115.1016811/-8.2402563,115.1075021/-8.2541032,115.0791492/-8.2608842,115.0627329/-8.160609,115.0299151/-8.2620814,115.1626348",
+      "routeWaypoints": [
+        [
+          -8.2620814,
+          115.1626348
+        ],
+        [
+          -8.2171873,
+          115.1016811
+        ],
+        [
+          -8.2402563,
+          115.1075021
+        ],
+        [
+          -8.2541032,
+          115.0791492
+        ],
+        [
+          -8.2608842,
+          115.0627329
+        ],
+        [
+          -8.160609,
+          115.0299151
+        ],
+        [
+          -8.2620814,
+          115.1626348
+        ]
+      ],
+      "stops": [
+        {
+          "order": 1,
+          "type": "depart",
+          "badge": "🏨",
+          "name": "Depart hotel",
+          "note": "Early start, before the crowds. Bring cash for entries & parking.",
+          "lat": -8.2620814,
+          "lng": 115.1626348,
+          "googleMapsSearchUrl": "https://www.google.com/maps/search/?api=1&query=-8.2620814,115.1626348",
+          "place": {
+            "placeId": "ChIJVeSJ7iyJ0S0RwZ3ut8UAIbI",
+            "address": "Jl. Raya Bedugul, Candikuning, Kec. Baturiti, Kabupaten Tabanan, Bali 82191",
+            "rating": 4.8,
+            "ratingCount": 1249,
+            "hours": "Reception 24 hours",
+            "phone": "+62 811-3810-8000",
+            "website": "https://dusunbedugulasri.com/",
+            "priceLevel": null,
+            "googleMapsPlaceUrl": "https://maps.google.com/?cid=12835541262177050049"
+          }
+        },
+        {
+          "order": 2,
+          "type": "waterfall",
+          "badge": "1",
+          "name": "Banyumala Twin Waterfalls",
+          "note": "Empty in the morning + clean water, great for a swim. ~300 steps down.",
+          "lat": -8.2171873,
+          "lng": 115.1016811,
+          "googleMapsSearchUrl": "https://www.google.com/maps/search/?api=1&query=-8.2171873,115.1016811",
+          "place": {
+            "placeId": "ChIJdegEep2P0S0RlyNNjuDZzE4",
+            "address": "Wanagiri, Sukasada, Buleleng Regency, Bali 81161",
+            "rating": 4.8,
+            "ratingCount": 5388,
+            "hours": "Daily 08:00–18:00",
+            "phone": null,
+            "website": null,
+            "priceLevel": null,
+            "googleMapsPlaceUrl": "https://maps.google.com/?cid=5678152788690674583"
+          }
+        },
+        {
+          "order": 3,
+          "type": "viewpoint",
+          "badge": "2",
+          "name": "Wanagiri Hidden Hill",
+          "note": "Swings and a view over both lakes. Entry ~$9/person (incl. photos).",
+          "lat": -8.2402563,
+          "lng": 115.1075021,
+          "googleMapsSearchUrl": "https://www.google.com/maps/search/?api=1&query=-8.2402563,115.1075021",
+          "place": {
+            "placeId": "ChIJJ5m6CESP0S0RJbkTRet1AtM",
+            "address": "Jl. Raya Wanagiri, Pancasari, Kec. Sukasada, Kabupaten Buleleng, Bali 81161",
+            "rating": 4.4,
+            "ratingCount": 1986,
+            "hours": "Daily 07:00–17:00",
+            "phone": "+62 819-9996-4666",
+            "website": "https://wanagirihiddenhillbali.com/",
+            "priceLevel": 1,
+            "googleMapsPlaceUrl": "https://maps.google.com/?cid=15204844945292900645"
+          }
+        },
+        {
+          "order": 4,
+          "type": "waterfall",
+          "badge": "3",
+          "name": "Munduk Waterfall + lunch",
+          "note": "Entry ~20–45k. Viewing platforms, then lunch at the warung.",
+          "lat": -8.2541032,
+          "lng": 115.0791492,
+          "googleMapsSearchUrl": "https://www.google.com/maps/search/?api=1&query=-8.2541032,115.0791492",
+          "place": {
+            "placeId": "ChIJ4WuUswqG0S0R0_F7ENm3htc",
+            "address": "Jl. Kayu Putih - Munduk, Munduk, Kec. Banjar, Kabupaten Buleleng, Bali 81152",
+            "rating": 4.5,
+            "ratingCount": 1084,
+            "hours": "Daily ~06:00–18:00",
+            "phone": null,
+            "website": null,
+            "priceLevel": null,
+            "googleMapsPlaceUrl": "https://maps.google.com/?cid=15530302507946078675"
+          }
+        },
+        {
+          "order": 5,
+          "type": "waterfall",
+          "badge": "4",
+          "name": "Melanting Waterfall",
+          "note": "Tallest of the cluster, deep jungle. Skip it if you're running late.",
+          "lat": -8.2608842,
+          "lng": 115.0627329,
+          "googleMapsSearchUrl": "https://www.google.com/maps/search/?api=1&query=-8.2608842,115.0627329",
+          "place": {
+            "placeId": null,
+            "address": "Gobleg, Kec. Banjar, Kabupaten Buleleng, Bali 81152",
+            "rating": null,
+            "ratingCount": null,
+            "hours": null,
+            "phone": null,
+            "website": null,
+            "priceLevel": null,
+            "googleMapsPlaceUrl": null
+          }
+        },
+        {
+          "order": 6,
+          "type": "beach",
+          "badge": "🏖️",
+          "name": "Lovina Beach",
+          "note": "Black sand, time to relax. Leave by 16:15 to get home before dark.",
+          "lat": -8.160609,
+          "lng": 115.0299151,
+          "googleMapsSearchUrl": "https://www.google.com/maps/search/?api=1&query=-8.160609,115.0299151",
+          "place": {
+            "placeId": "ChIJq2UHzD2b0S0RUAdyDHdHbKs",
+            "address": "Lovina Beach, Anturan, Buleleng, Buleleng Regency, Bali",
+            "rating": null,
+            "ratingCount": null,
+            "hours": null,
+            "phone": null,
+            "website": null,
+            "priceLevel": null,
+            "googleMapsPlaceUrl": "https://maps.google.com/?cid=12352326454605907792"
+          }
+        },
+        {
+          "order": 7,
+          "type": "hotel",
+          "badge": "🏨",
+          "name": "Back to hotel",
+          "note": "~1h30 back. Take the foggy switchbacks slow. Overnight.",
+          "lat": -8.2620814,
+          "lng": 115.1626348,
+          "googleMapsSearchUrl": "https://www.google.com/maps/search/?api=1&query=-8.2620814,115.1626348",
+          "place": {
+            "placeId": "ChIJVeSJ7iyJ0S0RwZ3ut8UAIbI",
+            "address": "Jl. Raya Bedugul, Candikuning, Kec. Baturiti, Kabupaten Tabanan, Bali 82191",
+            "rating": 4.8,
+            "ratingCount": 1249,
+            "hours": "Reception 24 hours",
+            "phone": "+62 811-3810-8000",
+            "website": "https://dusunbedugulasri.com/",
+            "priceLevel": null,
+            "googleMapsPlaceUrl": "https://maps.google.com/?cid=12835541262177050049"
+          }
+        }
+      ]
+    },
+    {
+      "number": 3,
+      "label": "Day 3",
+      "weekday": "Monday",
+      "date": "2026-06-15",
+      "dateLabel": "Mon 15 Jun",
+      "title": "Return → Park 23",
+      "color": "#e0723a",
+      "routeUrl": "https://www.google.com/maps/dir/-8.2620814,115.1626348/-8.577466,115.1807965/-8.737140499999999,115.1757056",
+      "routeWaypoints": [
+        [
+          -8.2620814,
+          115.1626348
+        ],
+        [
+          -8.577466,
+          115.1807965
+        ],
+        [
+          -8.737140499999999,
+          115.1757056
+        ]
+      ],
+      "stops": [
+        {
+          "order": 1,
+          "type": "checkout",
+          "badge": "🏨",
+          "name": "Check out",
+          "note": "Easy morning, no rush.",
+          "lat": -8.2620814,
+          "lng": 115.1626348,
+          "googleMapsSearchUrl": "https://www.google.com/maps/search/?api=1&query=-8.2620814,115.1626348",
+          "place": {
+            "placeId": "ChIJVeSJ7iyJ0S0RwZ3ut8UAIbI",
+            "address": "Jl. Raya Bedugul, Candikuning, Kec. Baturiti, Kabupaten Tabanan, Bali 82191",
+            "rating": 4.8,
+            "ratingCount": 1249,
+            "hours": "Reception 24 hours",
+            "phone": "+62 811-3810-8000",
+            "website": "https://dusunbedugulasri.com/",
+            "priceLevel": null,
+            "googleMapsPlaceUrl": "https://maps.google.com/?cid=12835541262177050049"
+          }
+        },
+        {
+          "order": 2,
+          "type": "fuel",
+          "badge": "⛽",
+          "name": "Fuel + shop (Mengwi)",
+          "note": "Meet-up on the way down: refuel, coffee, snack. Minimart, 24h.",
+          "lat": -8.577466,
+          "lng": 115.1807965,
+          "googleMapsSearchUrl": "https://www.google.com/maps/search/?api=1&query=-8.577466,115.1807965",
+          "place": {
+            "placeId": "ChIJz-m3JFE50i0RbPVaGq_sDrc",
+            "address": "Pertamina 54.803.08, Jl. Raya Kapal No.36, Kapal, Kec. Mengwi, Kabupaten Badung, Bali 80351",
+            "rating": 4.2,
+            "ratingCount": 1524,
+            "hours": "Open 24 hours",
+            "phone": "+62 819-1569-4441",
+            "website": "http://www.pertamina.co.id/",
+            "priceLevel": null,
+            "googleMapsPlaceUrl": "https://maps.google.com/?cid=13190740595420362092"
+          }
+        },
+        {
+          "order": 3,
+          "type": "finish",
+          "badge": "🏁",
+          "name": "Finish: Park 23",
+          "note": "Jl. Kediri, Tuban. End of the trip.",
+          "lat": -8.737140499999999,
+          "lng": 115.1757056,
+          "googleMapsSearchUrl": "https://www.google.com/maps/search/?api=1&query=-8.737140499999999,115.1757056",
+          "place": {
+            "placeId": "ChIJWUntfpdF0i0RJMGoPP6qZck",
+            "address": "Park23 Creative Hub, Jl. Kediri, Tuban, Kec. Kuta, Kabupaten Badung, Bali 80361",
+            "rating": 4.3,
+            "ratingCount": 206,
+            "hours": "Mon–Fri 09:00–21:00 · Sat–Sun 10:00–22:00",
+            "phone": null,
+            "website": "https://park23.id/",
+            "priceLevel": null,
+            "googleMapsPlaceUrl": "https://maps.google.com/?cid=14512193383187398948"
+          }
+        }
+      ]
+    }
+  ],
+  "reminders": [
+    {
+      "label": "Cash",
+      "text": "For entries & parking: Nungnung (~15–20k pp), Wanagiri (~$9 pp), Munduk/Melanting (~20–45k), strawberries (~50k/kg)."
+    },
+    {
+      "label": "Fuel",
+      "text": "Top up at the two meet-up stops — stations are sparse up in the mountains."
+    },
+    {
+      "label": "Layers",
+      "text": "Mountain evenings drop to 15–18°C. Take the foggy switchbacks slow."
+    },
+    {
+      "label": "Shoes",
+      "text": "Non-slip — the waterfall steps stay wet."
+    },
+    {
+      "label": "Lovina",
+      "text": "Leave by 16:15 so you're back before dark."
+    }
+  ],
+  "hotel": {
+    "name": "Bedugul Asri Village",
+    "lat": -8.2620814,
+    "lng": 115.1626348,
+    "placeId": "ChIJVeSJ7iyJ0S0RwZ3ut8UAIbI",
+    "address": "Jl. Raya Bedugul, Candikuning, Kec. Baturiti, Kabupaten Tabanan, Bali 82191",
+    "rating": 4.8,
+    "ratingCount": 1249,
+    "hours": "Reception 24 hours",
+    "phone": "+62 811-3810-8000",
+    "website": "https://dusunbedugulasri.com/",
+    "priceLevel": null,
+    "googleMapsPlaceUrl": "https://maps.google.com/?cid=12835541262177050049",
+    "googleMapsSearchUrl": "https://www.google.com/maps/search/?api=1&query=-8.2620814,115.1626348"
+  }
+}

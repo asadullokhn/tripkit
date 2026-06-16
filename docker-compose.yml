@@ -1,0 +1,43 @@
+# Keep the project name "balitrip-expenses" so the existing
+# balitrip-expenses_balitrip-data volume (the live split DB) is reused.
+name: balitrip-expenses
+
+services:
+  api:
+    build: ./api
+    image: balitrip-api:latest
+    container_name: balitrip-expenses-api
+    environment:
+      - DATA_DIR=/data
+      - PASSCODE=${PASSCODE:-changeme}
+      - ADMIN_PASSWORD_HASH=${ADMIN_PASSWORD_HASH:-}
+      - SESSION_SECRET=${SESSION_SECRET:-}
+      - SEED_FILE=${SEED_FILE:-/seed/demo.json}
+      - OCR_API_BASE=${OCR_API_BASE:-}
+      - OCR_API_KEY=${OCR_API_KEY:-}
+      - OCR_MODEL=${OCR_MODEL:-}
+    volumes:
+      - balitrip-data:/data
+    restart: unless-stopped
+
+  app:
+    build: .
+    image: balitrip-site:latest
+    container_name: balitrip-expenses-app
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  tunnel:
+    image: asadullokhn/teztun:latest
+    container_name: balitrip-tunnel
+    command: ["tcp", "app:80", "--subdomain", "balitrip"]
+    environment:
+      - TEZTUN_TOKEN=${TEZTUN_TOKEN}
+      - TEZTUN_NO_UPDATE=1
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  balitrip-data:

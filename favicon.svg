@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="balitrip">
+  <!-- a bill split into shares: four wedges in the person palette around a dark center -->
+  <rect width="64" height="64" rx="14" fill="#0a1518"/>
+  <g transform="translate(0,0)">
+    <path d="M32 32 L32 9 A23 23 0 0 1 55 32 Z" fill="#ff6f59"/>
+    <path d="M32 32 L55 32 A23 23 0 0 1 32 55 Z" fill="#2fd6c3"/>
+    <path d="M32 32 L32 55 A23 23 0 0 1 9 32 Z" fill="#ffd66b"/>
+    <path d="M32 32 L9 32 A23 23 0 0 1 32 9 Z" fill="#c08cff"/>
+    <circle cx="32" cy="32" r="9.5" fill="#0a1518"/>
+    <circle cx="32" cy="32" r="9.5" fill="none" stroke="#16343a" stroke-width="1.5"/>
+  </g>
+</svg>
