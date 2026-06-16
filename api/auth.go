@@ -39,11 +39,11 @@ func stretch(pw string, salt []byte) []byte {
 func hashPassword(pw string) string {
 	salt := make([]byte, 16)
 	_, _ = rand.Read(salt)
-	return hex.EncodeToString(salt) + "$" + hex.EncodeToString(stretch(pw, salt))
+	return hex.EncodeToString(salt) + ":" + hex.EncodeToString(stretch(pw, salt))
 }
 
 func verifyPassword(pw, stored string) bool {
-	parts := strings.SplitN(stored, "$", 2)
+	parts := strings.SplitN(stored, ":", 2)
 	if len(parts) != 2 {
 		return false
 	}
