@@ -86,6 +86,8 @@
   map.attributionControl.setPrefix(false);
   map.setView([-2, 118], 5);
   const layer = L.layerGroup().addTo(map);
+  const routeLayer = L.layerGroup().addTo(map);   // road-following day routes (vectors sit below markers)
+  const routeCache = {};                          // daySig -> [[lat,lng]...] (road) | null (failed) | "pending"
   let markers = [], flat = [], activeIdx = -1;
 
   const viewDays = () => currentDay === "all" ? days().map((_, i) => i) : (days()[currentDay] ? [currentDay] : []);
@@ -102,16 +104,44 @@
     const b = L.latLngBounds(pts);
     if (animate) map.flyToBounds(b, { ...pad, duration: 0.7 }); else map.fitBounds(b, pad);
   }
-  function renderMap() {
-    layer.clearLayers(); markers = [];
+  // road-following routes: fetch driving geometry from OSRM (no key, CORS-ok),
+  // fall back to a dashed straight line while loading or if the request fails.
+  function daySig(di) {
+    return days()[di].stops.filter(hasPin).map((s) => s.lat.toFixed(5) + "," + s.lng.toFixed(5)).join(";");
+  }
+  async function fetchRoute(sig, pts) {
+    const coords = pts.map((p) => p[1] + "," + p[0]).join(";");   // OSRM expects lng,lat
+    const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+    const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const res = await fetch(url, { signal: ctrl.signal });
+      if (!res.ok) throw 0;
+      const j = await res.json();
+      const g = j.routes && j.routes[0] && j.routes[0].geometry && j.routes[0].geometry.coordinates;
+      if (!g || !g.length) throw 0;
+      routeCache[sig] = g.map((c) => [c[1], c[0]]);   // → [lat,lng] for Leaflet
+    } catch (_) { routeCache[sig] = null; }            // remember failure → keep straight, don't refetch
+    finally { clearTimeout(timer); }
+  }
+  function drawRoutes() {
+    routeLayer.clearLayers();
     viewDays().forEach((di) => {
-      const line = days()[di].stops.filter(hasPin).map((s) => [s.lat, s.lng]);
-      if (line.length > 1) {
-        const c = dayColor(di);
-        L.polyline(line, { color: c, weight: 10, opacity: 0.14, lineCap: "round" }).addTo(layer);
-        L.polyline(line, { color: c, weight: 3.5, opacity: 0.92, lineCap: "round", dashArray: "1 9" }).addTo(layer);
+      const pts = days()[di].stops.filter(hasPin).map((s) => [s.lat, s.lng]);
+      if (pts.length < 2) return;
+      const c = dayColor(di), sig = daySig(di), road = routeCache[sig];
+      if (Array.isArray(road)) {                        // real road geometry — solid line + glow
+        L.polyline(road, { color: c, weight: 11, opacity: 0.14, lineCap: "round", lineJoin: "round" }).addTo(routeLayer);
+        L.polyline(road, { color: c, weight: 4, opacity: 0.95, lineCap: "round", lineJoin: "round" }).addTo(routeLayer);
+      } else {                                           // fallback: dashed "as-the-crow-flies"
+        L.polyline(pts, { color: c, weight: 9, opacity: 0.12, lineCap: "round" }).addTo(routeLayer);
+        L.polyline(pts, { color: c, weight: 3.5, opacity: 0.85, lineCap: "round", dashArray: "1 9" }).addTo(routeLayer);
+        if (road === undefined) { routeCache[sig] = "pending"; fetchRoute(sig, pts).then(drawRoutes); }
       }
     });
+  }
+  function renderMap() {
+    layer.clearLayers(); markers = [];
+    drawRoutes();
     flat.forEach((f, k) => {
       if (!hasPin(f.stop)) { markers.push(null); return; }
       const badge = badgeFor(days()[f.di], f.stop, f.si);
