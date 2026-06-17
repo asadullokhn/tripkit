@@ -77,6 +77,7 @@ type Stop struct {
 	URL             string  `json:"url,omitempty"`
 	Rating          float64 `json:"rating,omitempty"`
 	LinkedExpenseID string  `json:"linkedExpenseId,omitempty"`
+	Done            bool    `json:"done,omitempty"` // checked off during the trip (shared group state)
 }
 
 type Day struct {

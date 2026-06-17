@@ -146,7 +146,7 @@
       if (!hasPin(f.stop)) { markers.push(null); return; }
       const badge = badgeFor(days()[f.di], f.stop, f.si);
       const logi = LOGI.has(f.stop.type);
-      const icon = L.divIcon({ className: "mk-wrap", html: `<div class="mk ${logi ? "is-logi" : ""}" style="--mk:${f.color}"><span>${badge}</span></div>`,
+      const icon = L.divIcon({ className: "mk-wrap" + (f.stop.done ? " is-done" : ""), html: `<div class="mk ${logi ? "is-logi" : ""}" style="--mk:${f.color}"><span>${badge}</span></div>`,
         iconSize: [30, 30], iconAnchor: [15, 35], popupAnchor: [0, -34] });
       const m = L.marker([f.stop.lat, f.stop.lng], { icon, riseOnHover: true }).addTo(layer);
       m.bindPopup(`<div class="pop-badge">${esc(typeOf(f.stop.type).label)}</div><div class="pop-name">${esc(f.stop.name)}</div>`);
@@ -185,8 +185,8 @@
         <button class="se" data-act="edit" data-di="${di}" data-si="${si}" title="Edit">✎</button>
       </div>` : "";
     return `
-      <li class="tl-item anim" data-gi="${gi}" style="animation-delay:${Math.min(0.6, 0.05 * gi + 0.08)}s">
-        <div class="tl-node ${LOGI.has(stop.type) ? "is-logi" : ""}"><span class="nd-badge">${badgeFor(day, stop, si)}</span></div>
+      <li class="tl-item anim ${stop.done ? "is-done" : ""}" data-gi="${gi}" style="animation-delay:${Math.min(0.6, 0.05 * gi + 0.08)}s">
+        <div class="tl-node ${LOGI.has(stop.type) ? "is-logi" : ""}" ${authed ? `data-sid="1" data-act="done" data-di="${di}" data-si="${si}" role="button" tabindex="0" aria-label="${stop.done ? "Mark not done" : "Mark done"}"` : ""}><span class="nd-badge">${badgeFor(day, stop, si)}</span><span class="nd-check">✓</span></div>
         <button class="stop" data-idx="${gi}">
           <div class="thumb" style="--thumb:linear-gradient(150deg, ${t.g[0]}, ${t.g[1]})"><span>${t.icon}</span></div>
           <div class="stop-body">
@@ -313,6 +313,7 @@
     catch (e) { toast(e.code === 401 ? "Enter the passcode to edit" : "Save failed", "err"); if (e.code === 401) { authed = false; showLock(); } reload(true); }
   }
   function onEditAct(act, di, si) {
+    if (act === "done") return toggleDone(di, si);
     if (act === "up" || act === "down") return moveStop(di, si, act === "up" ? -1 : 1);
     if (act === "dayup" || act === "daydown") return moveDay(di, act === "dayup" ? -1 : 1);
     if (act === "edit") return openStop(di, si);
@@ -322,6 +323,11 @@
     if (act === "cost") return openCost(di, si);
   }
   function moveStop(di, si, d) { const a = days()[di].stops; const j = si + d; if (j < 0 || j >= a.length) return; [a[si], a[j]] = [a[j], a[si]]; renderSheet(); renderMap(); saveItin(); }
+  function toggleDone(di, si) {
+    if (!authed) return requireAuth(() => toggleDone(di, si));
+    const s = days()[di].stops[si]; s.done = !s.done;
+    renderSheet(); renderMap(); saveItin(s.done ? "Marked done" : "Marked not done");
+  }
   function moveDay(di, d) { const a = days(); const j = di + d; if (j < 0 || j >= a.length) return; [a[di], a[j]] = [a[j], a[di]]; currentDay = j; renderAll(); saveItin(); }
 
   // stop dialog
