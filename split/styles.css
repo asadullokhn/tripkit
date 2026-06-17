@@ -10,7 +10,7 @@
   --line-soft:  #1a373d;
   --text:       #eaf4f1;
   --muted:      #8aa6a3;
-  --faint:      #5f7d7c;
+  --faint:      #8aa49c;
 
   --sun:        #ffb454;   /* mango */
   --coral:      #ff6f59;   /* sunset coral */
@@ -537,14 +537,16 @@ button.pbar-chip:hover { border-color: var(--c, var(--teal)); transform: transla
 
 /* swatch focus ring (radiogroup) */
 .swatch:focus-visible, .picker-row:focus-visible, .assign:focus-visible, .seg__btn:focus-visible,
-.chip:focus-visible, .edit-btn:focus-visible, .mini-btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.chip:focus-visible, .edit-btn:focus-visible, .mini-btn:focus-visible,
+.ghost-btn:focus-visible, .solid-btn:focus-visible, .copy-btn:focus-visible, .link-btn:focus-visible,
+.payout-edit:focus-visible, .adjust__del:focus-visible, .verify-btn:focus-visible, .ri-del:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
 
 /* touch targets: only on touch devices, so desktop look is unchanged */
 @media (pointer: coarse) {
   .ghost-btn, .solid-btn, .seg__btn, .mini-btn, .picker-row, .assign { min-height: 44px; }
-  .ghost-btn--sm { min-height: 40px; }
-  .edit-btn { width: 40px; height: 40px; }
-  .ri-del, .adjust__del { min-width: 40px; min-height: 40px; }
+  .ghost-btn--sm { min-height: 44px; }
+  .edit-btn { width: 44px; height: 44px; }
+  .ri-del, .adjust__del { min-width: 44px; min-height: 44px; }
   .rc-item input, .field input, .field select, .ex-share, .picker-search { min-height: 42px; }
   .swatch { width: 36px; height: 36px; }
 }
@@ -610,7 +612,7 @@ button.pbar-chip:hover { border-color: var(--c, var(--teal)); transform: transla
 .lightbox__close:hover { border-color: var(--coral); }
 
 @media (pointer: coarse) {
-  .copy-btn, .payout-edit, .link-btn { min-height: 40px; min-width: 36px; }
+  .copy-btn, .payout-edit, .link-btn { min-height: 44px; min-width: 44px; }
 }
 
 /* brand nav (← Tripkit · 🗺 Plan) — Plan⇄Bills view switcher */
