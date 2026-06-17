@@ -211,7 +211,7 @@ html, body {
 .recenter {
   position: absolute; z-index: 19; right: 14px;
   bottom: calc(46vh + 16px);
-  width: 42px; height: 42px; border-radius: 13px;
+  width: 44px; height: 44px; border-radius: 13px;
   display: grid; place-items: center; cursor: pointer;
   color: var(--ink-soft);
   background: rgba(12,19,15,0.7);
@@ -522,7 +522,7 @@ body.sheet-full .recenter { opacity: 0; pointer-events: none; transform: transla
 .locate {
   position: absolute; z-index: 19; right: 14px;
   bottom: calc(46vh + 66px);
-  width: 42px; height: 42px; border-radius: 13px;
+  width: 44px; height: 44px; border-radius: 13px;
   display: grid; place-items: center; cursor: pointer;
   color: var(--ink-soft);
   background: rgba(12,19,15,0.7);
@@ -574,7 +574,7 @@ body.sheet-full .locate { opacity: 0; pointer-events: none; transform: translate
 /* ---------- Hide-sheet button (mobile only) ---------- */
 .sheet-hide {
   position: absolute; z-index: 3; top: 8px; right: 12px;
-  width: 30px; height: 30px; border-radius: 9px;
+  width: 44px; height: 44px; border-radius: 11px;
   display: grid; place-items: center; cursor: pointer;
   color: var(--muted); background: rgba(255,255,255,0.04);
   border: 1px solid var(--line);
@@ -610,7 +610,7 @@ body.sheet-hidden .sheet-hide { opacity: 0; pointer-events: none; }
 .eb-btn { appearance:none; background:var(--panel-2,rgba(255,255,255,.04)); border:1px solid var(--line-2,rgba(255,255,255,.13)); color:var(--ink-soft,#cdd8cf);
   font-family:"Hanken Grotesque",sans-serif; font-weight:600; font-size:.78rem; padding:7px 12px; border-radius:99px; cursor:pointer; transition:.15s; min-height:36px; }
 .eb-btn:hover { color:#fff; border-color:var(--accent,#e6814a); }
-.eb-btn.sm { font-size:.68rem; padding:4px 9px; min-height:0; }
+.eb-btn.sm { font-size:.68rem; padding:7px 10px; min-height:36px; }
 .eb-btn.danger { color:#ff9; border-color:transparent; background:rgba(255,120,130,.16); color:#ff8a93; }
 .admin-only[hidden] { display:none; }
 .solid-btn { appearance:none; border:0; cursor:pointer; font-family:"Hanken Grotesque",sans-serif; font-weight:700; font-size:.9rem;
@@ -643,6 +643,10 @@ body.sheet-hidden .sheet-hide { opacity: 0; pointer-events: none; }
 .dlg__actions { display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:2px; }
 .fld { display:grid; gap:5px; font-family:"DM Mono",monospace; font-size:.66rem; letter-spacing:.05em; text-transform:uppercase; color:var(--muted,#8fa395); }
 .fld-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.fld-row--pick { grid-template-columns:auto 1fr; align-items:center; }
+.fld__hint { font-family:"DM Mono", ui-monospace, monospace; font-size:.74rem; color:var(--muted-2,#6d8174); }
+.fld__hint.set { color:var(--day,#34dfc0); }
+body.picking #map { cursor:crosshair; }
 .fld input, .fld select, .fld textarea { font-family:"Hanken Grotesque",sans-serif; font-size:.95rem; color:#fff; background:#0a120f;
   border:1px solid var(--line-2,rgba(255,255,255,.13)); border-radius:10px; padding:10px 12px; text-transform:none; letter-spacing:0; }
 .fld input:focus, .fld select:focus, .fld textarea:focus { outline:none; border-color:var(--accent,#e6814a); }
@@ -670,7 +674,7 @@ body.sheet-hidden .sheet-hide { opacity: 0; pointer-events: none; }
 .cost-chip.warn { color:#ffce6b; border-color:rgba(255,206,107,.4); }
 .nopin { font-family:"DM Mono",monospace; font-size:.62rem; color:var(--muted-2,#6d8174); margin-left:6px; }
 .stop-edit { display:flex; gap:4px; padding:0 8px 10px 52px; }
-.se { appearance:none; width:34px; height:34px; border-radius:9px; cursor:pointer; background:var(--panel-2,rgba(255,255,255,.04));
+.se { appearance:none; width:40px; height:40px; border-radius:9px; cursor:pointer; background:var(--panel-2,rgba(255,255,255,.04));
   border:1px solid var(--line-2,rgba(255,255,255,.13)); color:var(--ink-soft,#cdd8cf); font-size:.8rem; transition:.15s; }
 .se:hover { color:#fff; border-color:var(--accent,#e6814a); }
 .add-stop, .add-day { margin:6px 0 4px 52px; }

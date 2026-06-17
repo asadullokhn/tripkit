@@ -201,7 +201,6 @@
   }
   function dayHead(di) {
     const day = days()[di], dir = dirUrl(day);
-    const sights = day.stops.filter((s) => !LOGI.has(s.type)).length;
     const addDay = editing ? `<button class="eb-btn sm" data-act="editday" data-di="${di}">✎ day</button>
       <button class="eb-btn sm" data-act="dayup" data-di="${di}" title="Move day earlier">▲</button>
       <button class="eb-btn sm" data-act="daydown" data-di="${di}" title="Move day later">▼</button>` : "";
@@ -211,7 +210,6 @@
         <h2 class="day-title">${esc(day.title || "Day " + (di + 1))}</h2>
         <div class="day-actions">
           ${dir ? `<a class="route-btn" href="${dir}" target="_blank" rel="noopener">Open route ↗</a>` : ""}
-          <span class="meta-chip"><b>${sights}</b> sights</span>
           ${addDay}
         </div>
       </div>`;
@@ -291,7 +289,7 @@
   // ---------- render all ----------
   function renderAll() {
     $("#brand-title").textContent = (data && data.trip && data.trip.name) || itin.title || "Itinerary";
-    $("#brand-eyebrow").textContent = itin.title && data && itin.title !== data.trip.name ? itin.title : "Itinerary";
+    { const eb = $("#brand-eyebrow"); const t = (itin.title && data && data.trip && itin.title !== data.trip.name) ? itin.title : ""; eb.textContent = t; eb.hidden = !t; }
     $("#trip-chip").textContent = days().length ? `${days().length} day${days().length > 1 ? "s" : ""}` : "";
     const bl = $("#bills-link"); if (bl && tripId) bl.href = "/split/?t=" + encodeURIComponent(tripId);
     if (typeof currentDay === "number" && !days()[currentDay]) currentDay = days().length ? 0 : "all";
@@ -304,7 +302,6 @@
     $("#editToggle").setAttribute("aria-pressed", editing ? "true" : "false");
     document.querySelectorAll(".admin-only").forEach((el) => { el.hidden = !admin; });
     $("#aiBtn").hidden = !(admin && aiEnabled);
-    $("#loginBtn").hidden = admin;
     $("#logoutBtn").hidden = !admin;
   }
 
@@ -328,21 +325,59 @@
   function moveDay(di, d) { const a = days(); const j = di + d; if (j < 0 || j >= a.length) return; [a[di], a[j]] = [a[j], a[di]]; currentDay = j; renderAll(); saveItin(); }
 
   // stop dialog
-  const stopDlg = $("#stopDialog"); let stopEdit = null;
-  function openStop(di, si) {
+  const stopDlg = $("#stopDialog"); let stopEdit = null, stopPrefill = null, pickMode = false;
+  // build the Type <select> from the TYPE catalogue so labels never drift from the map
+  $("#stType").innerHTML = Object.keys(TYPE).map((k) => `<option value="${k}">${TYPE[k].icon} ${esc(TYPE[k].label)}</option>`).join("");
+  function setCoords(c) {
+    $("#stLat").value = c ? c.lat : ""; $("#stLng").value = c ? c.lng : "";
+    const el = $("#stCoords"); el.textContent = c ? `📍 ${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}` : "No pin yet"; el.classList.toggle("set", !!c);
+  }
+  // pull lat,lng out of a pasted Google/Apple Maps link or a raw "lat, lng"
+  function parseCoords(s) {
+    if (!s) return null;
+    const m = s.match(/@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/) ||
+              s.match(/[?&](?:q|ll|center|destination|sll)=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/) ||
+              s.match(/(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);
+    if (!m) return null;
+    const lat = parseFloat(m[1]), lng = parseFloat(m[2]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+    return { lat, lng };
+  }
+  function captureStop() {
+    return { name: $("#stName").value, type: $("#stType").value, time: $("#stTime").value,
+      url: $("#stUrl").value, note: $("#stNote").value,
+      lat: parseFloat($("#stLat").value) || 0, lng: parseFloat($("#stLng").value) || 0 };
+  }
+  function openStop(di, si, prefill) {
     stopEdit = { di, si };
-    const s = si != null ? days()[di].stops[si] : {};
+    const s = prefill || (si != null ? days()[di].stops[si] : {});
     $("#stopTitle").textContent = si != null ? "Edit stop" : "Add stop";
     $("#stName").value = s.name || ""; $("#stType").value = s.type || "activity";
     $("#stTime").value = s.time || ""; $("#stUrl").value = s.url || "";
-    $("#stNote").value = s.note || ""; $("#stLat").value = (s.lat ?? "") === 0 ? "" : (s.lat ?? "");
-    $("#stLng").value = (s.lng ?? "") === 0 ? "" : (s.lng ?? "");
+    $("#stNote").value = s.note || ""; $("#stPlace").value = "";
+    setCoords((Number.isFinite(s.lat) && (s.lat !== 0 || s.lng !== 0)) ? { lat: s.lat, lng: s.lng } : null);
     $("#stErr").hidden = true; $("#stDelete").hidden = si == null;
     stopDlg.showModal(); setTimeout(() => $("#stName").focus(), 30);
   }
+  $("#stPlace").addEventListener("input", () => { const c = parseCoords($("#stPlace").value); if (c) setCoords(c); });
+  $("#stPick").addEventListener("click", () => {
+    stopPrefill = captureStop(); stopDlg.close();
+    pickMode = true; document.body.classList.add("picking"); toast("Tap the map to place the pin");
+  });
+  map.on("click", (e) => {
+    if (!pickMode) return;
+    pickMode = false; document.body.classList.remove("picking");
+    const pf = stopPrefill || {}; pf.lat = +e.latlng.lat.toFixed(6); pf.lng = +e.latlng.lng.toFixed(6);
+    openStop(stopEdit.di, stopEdit.si, pf);
+  });
   $("#stCancel").addEventListener("click", () => stopDlg.close());
   stopDlg.addEventListener("cancel", (e) => { e.preventDefault(); stopDlg.close(); });
-  $("#stDelete").addEventListener("click", () => { const { di, si } = stopEdit; days()[di].stops.splice(si, 1); stopDlg.close(); renderSheet(); renderMap(); saveItin("Stop removed"); });
+  $("#stDelete").addEventListener("click", async () => {
+    const { di, si } = stopEdit; const nm = (days()[di].stops[si] && days()[di].stops[si].name) || "this stop";
+    stopDlg.close();
+    if (!(await confirmAsk("Delete stop?", `“${nm}” will be removed from the day.`, "Delete", true))) return;
+    days()[di].stops.splice(si, 1); renderSheet(); renderMap(); saveItin("Stop removed");
+  });
   $("#stopForm").addEventListener("submit", (e) => {
     e.preventDefault();
     const name = $("#stName").value.trim();
@@ -368,7 +403,13 @@
   }
   $("#dyCancel").addEventListener("click", () => dayDlg.close());
   dayDlg.addEventListener("cancel", (e) => { e.preventDefault(); dayDlg.close(); });
-  $("#dyDelete").addEventListener("click", () => { if (dayEdit == null) return; itin.days.splice(dayEdit, 1); currentDay = itin.days.length ? 0 : "all"; dayDlg.close(); renderAll(); saveItin("Day removed"); });
+  $("#dyDelete").addEventListener("click", async () => {
+    if (dayEdit == null) return;
+    const d = itin.days[dayEdit]; const nm = (d && (d.title || d.label)) || "this day"; const n = (d && d.stops) ? d.stops.length : 0;
+    dayDlg.close();
+    if (!(await confirmAsk("Delete day?", `“${nm}”${n ? ` and its ${n} stop${n > 1 ? "s" : ""}` : ""} will be removed.`, "Delete", true))) return;
+    itin.days.splice(dayEdit, 1); currentDay = itin.days.length ? 0 : "all"; renderAll(); saveItin("Day removed");
+  });
   $("#dayForm").addEventListener("submit", (e) => {
     e.preventDefault();
     const title = $("#dyTitle").value.trim(); if (!title) return;
@@ -380,7 +421,6 @@
 
   // edit toggle + login
   $("#editToggle").addEventListener("click", () => { if (!editing) return requireAuth(() => { editing = true; renderAll(); }); editing = false; renderAll(); });
-  $("#loginBtn").addEventListener("click", () => requireAuth(() => {}));  // unlocking promotes to admin via /me
   $("#logoutBtn").addEventListener("click", async () => { try { await api("/logout", { method: "POST" }); } catch (_) {} admin = false; applyAuthUI(); toast("Logged out"); });
 
   // ---------- cost link ----------
@@ -441,7 +481,10 @@
   function endDraft() { draft = null; $("#draftBanner").hidden = true; }
   $("#draftDiscard").addEventListener("click", () => { endDraft(); reload(true); });
   $("#draftRegen").addEventListener("click", () => { endDraft(); $("#aiBtn").click(); });
-  $("#draftReplace").addEventListener("click", async () => { itin = JSON.parse(JSON.stringify(draft)); endDraft(); await saveItin("Itinerary saved"); });
+  $("#draftReplace").addEventListener("click", async () => {
+    if (!(await confirmAsk("Replace itinerary?", "This overwrites the entire saved plan with the AI draft.", "Replace", true))) return;
+    itin = JSON.parse(JSON.stringify(draft)); endDraft(); await saveItin("Itinerary saved");
+  });
   $("#draftAppend").addEventListener("click", async () => {
     try { const cur = await api(`/trips/${tripId}/itinerary`); const base = (cur && cur.itinerary) || { title: "", days: [] };
       base.days = (base.days || []).concat(draft.days); if (!base.title) base.title = draft.title;
@@ -497,7 +540,7 @@
       meMarker = L.marker(ll, { icon: L.divIcon({ className: "me-wrap", html: `<div class="me-dot"></div>`, iconSize: [18, 18], iconAnchor: [9, 9] }), interactive: false }).addTo(locLayer);
       map.flyTo(ll, Math.max(map.getZoom(), 14), { duration: 0.8 }); } else { meMarker.setLatLng(ll); meCircle.setLatLng(ll).setRadius(acc); }
     $("#locate").classList.add("on"); }
-  $("#locate").addEventListener("click", () => { if (!navigator.geolocation) return; if (meMarker) return map.flyTo(meMarker.getLatLng(), 15, { duration: 0.6 }); navigator.geolocation.getCurrentPosition(onPos, () => {}, { enableHighAccuracy: true, timeout: 12000 }); });
+  $("#locate").addEventListener("click", () => { if (!navigator.geolocation) return; if (meMarker) return map.flyTo(meMarker.getLatLng(), 15, { duration: 0.6 }); navigator.geolocation.getCurrentPosition(onPos, () => toast("Couldn't get your location", "err"), { enableHighAccuracy: true, timeout: 12000 }); });
   $("#recenter").addEventListener("click", () => fitView(true));
   let rT; window.addEventListener("resize", () => { clearTimeout(rT); rT = setTimeout(() => { map.invalidateSize(); if (window.innerWidth < 860) setSheetState(sheet.dataset.state || "peek"); fitView(false); }, 150); });
 
