@@ -271,7 +271,11 @@
   function pumpLegs() {
     while (legActive < 3 && legQueue.length) {
       const [sig, A, B] = legQueue.shift(); legActive++;
-      fetchLeg(sig, A, B).then(() => { legActive--; drawRoutes(); refreshLegPills(); pumpLegs(); });
+      fetchLeg(sig, A, B).then(() => {
+        legActive--; drawRoutes(); refreshLegPills(); pumpLegs();
+        // once all queued legs resolve, recompute the day timeline with the now-known drive times
+        if (legActive === 0 && !legQueue.length && !editing && !document.querySelector("dialog[open]")) renderSheet();
+      });
     }
   }
   async function fetchLeg(sig, A, B) {
