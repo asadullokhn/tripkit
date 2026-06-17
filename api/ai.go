@@ -88,11 +88,12 @@ func handleGenerateItinerary(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(in.Notes) != "" {
 		userMsg += "\nAdditional notes: " + in.Notes
 	}
+	userMsg += "\nKeep it compact: short stop notes (max ~12 words) and at most 5 stops per day, so the whole trip fits in one JSON response."
 
 	reqBody := map[string]any{
 		"model":           cfgLLMModel,
 		"temperature":     0.4,
-		"max_tokens":      4096,
+		"max_tokens":      8192,
 		"response_format": map[string]string{"type": "json_object"},
 		"messages": []any{
 			map[string]any{"role": "system", "content": itinerarySystemPrompt},
@@ -101,7 +102,7 @@ func handleGenerateItinerary(w http.ResponseWriter, r *http.Request) {
 	}
 	bj, _ := json.Marshal(reqBody)
 
-	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 150*time.Second)
 	defer cancel()
 	url := strings.TrimRight(cfgLLMBase, "/") + "/chat/completions"
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bj))
