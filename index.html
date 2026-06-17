@@ -35,8 +35,9 @@
     .wrap { width:min(100%,760px); }
 
     /* ---- header ---- */
-    .top { display:flex; align-items:flex-start; justify-content:space-between; gap:16px;
+    .top { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:12px 16px;
       animation:rise var(--dur-slow) var(--ease-entrance) both; }
+    .top > div:first-child { min-width:0; flex:1 1 auto; }
     .brandrow { display:flex; align-items:center; gap:14px; }
     .brandrow img { width:54px; height:54px; flex:none; filter:drop-shadow(0 6px 16px rgba(0,0,0,.45)); }
     h1 { font-family:var(--font-display); font-weight:800; font-size:clamp(2.2rem,8vw,3.6rem); line-height:1; margin:0 0 6px;
