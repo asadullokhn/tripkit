@@ -423,17 +423,19 @@
       <span><span class="person__name">${esc(p.name)}</span>
         <span class="person__sub">had ${money(c.consumed[p.id])} · paid ${money(c.paid[p.id])}</span></span>
       <span class="person__net ${sign}">${money(Math.abs(n))}<small>${label}</small></span>`;
-    // payout / bank details (editor tier — anyone with passcode can set their own)
-    const mid = row.querySelector(".person__sub").parentNode;
-    const pay = document.createElement("span"); pay.className = "person__payout";
+    // payout / bank details — only meaningful for receivers (net > 0), or anyone who already set one
     const val = personById[p.id] && personById[p.id].bankAccount;
-    pay.innerHTML = `<span class="person__payout-label">payout</span><span class="person__payout-val${val ? "" : " muted"}">${esc(val || "not set")}</span>`;
-    if (canEdit) {
-      const e = document.createElement("button"); e.type = "button"; e.className = "payout-edit";
-      e.setAttribute("aria-label", "Edit payout for " + p.name); e.innerHTML = `<span aria-hidden="true">✎</span>`;
-      e.addEventListener("click", () => openBank(p)); pay.appendChild(e);
+    if (n > 0 || val) {
+      const mid = row.querySelector(".person__sub").parentNode;
+      const pay = document.createElement("span"); pay.className = "person__payout";
+      pay.innerHTML = `<span class="person__payout-label">payout</span><span class="person__payout-val${val ? "" : " muted"}">${esc(val || "not set")}</span>`;
+      if (canEdit) {
+        const e = document.createElement("button"); e.type = "button"; e.className = "payout-edit";
+        e.setAttribute("aria-label", "Edit payout for " + p.name); e.innerHTML = `<span aria-hidden="true">✎</span>`;
+        e.addEventListener("click", () => openBank(p)); pay.appendChild(e);
+      }
+      mid.appendChild(pay);
     }
-    mid.appendChild(pay);
     return row;
   }
 
@@ -476,7 +478,7 @@
       adjEl.appendChild(li);
     });
 
-    renderSettlement(c); // #transfers, #finalTransfers, #settleAdmin, #planStale, #fabLabel (published plan vs live)
+    renderSettlement(c); // #finalTransfers, #settleAdmin, #planStale, #fabLabel (published plan vs live)
     const fn = $("#finalNote");
     if (fn) fn.textContent = c.unassignedCount
       ? `Note: ${c.unassignedCount} line${c.unassignedCount > 1 ? "s" : ""} (${money(c.unassignedTotal)}) still unassigned — assign them for an exact split.` : "";
@@ -484,8 +486,6 @@
     const pct = c.totalLines ? Math.round((c.assignedLines / c.totalLines) * 100) : 0;
     $("#progressFill").style.width = pct + "%";
     $("#progressLabel").textContent = `${c.assignedLines} of ${c.totalLines} lines assigned`;
-    $("#unassignedNote").textContent = c.unassignedCount
-      ? `${c.unassignedCount} line${c.unassignedCount > 1 ? "s" : ""} (${money(c.unassignedTotal)}) still unassigned — not included above.` : "";
   }
 
   // ---------- settlement plan (publish / proof / verify) ----------
@@ -503,14 +503,12 @@
     const planStale = $("#planStale");
     if (pub) {
       renderPlanCards($("#finalTransfers"), pub.transfers);
-      renderPlanMirror($("#transfers"), pub.transfers);
       const liveAsPlan = live.map((t) => ({ fromId: t.from, toId: t.to, amount: t.amount }));
       if (planStale) planStale.hidden = (planSig(live) === planSig(pub.transfers));
       const pend = pub.transfers.filter((t) => t.status !== "verified").length;
       $("#fabLabel").textContent = pend ? `Settle up · ${pend} to pay` : "All settled ✓";
       void liveAsPlan;
     } else {
-      fillTransfers($("#transfers"), live, false);
       fillTransfers($("#finalTransfers"), live, true);
       if (planStale) planStale.hidden = true;
       $("#fabLabel").textContent = live.length ? `Settle up · ${live.length} payment${live.length > 1 ? "s" : ""}` : "All square";
@@ -573,18 +571,6 @@
       el.appendChild(li);
     });
   }
-  function renderPlanMirror(el, transfers) {
-    el.innerHTML = "";
-    if (!transfers.length) { el.innerHTML = `<li class="transfer empty">All square 🎉</li>`; return; }
-    transfers.forEach((t) => {
-      const li = document.createElement("li"); li.className = "transfer transfer--plan";
-      li.setAttribute("aria-label", `${pname(t.fromId)} pays ${pname(t.toId)} ${money(t.amount)} — ${t.status || "pending"}`);
-      li.innerHTML = `<b style="color:${pcol(t.fromId)}">${esc(pname(t.fromId))}</b>
-        <span class="arrow" aria-hidden="true">→</span><b style="color:${pcol(t.toId)}">${esc(pname(t.toId))}</b>
-        ${statusBadge(t.status)}<span class="amt">${money(t.amount)}</span>`;
-      el.appendChild(li);
-    });
-  }
   async function publishSettlement() {
     const live = settle(compute().net);
     if (!live.length) { toast("Nothing to settle", { type: "err" }); return; }
@@ -637,7 +623,7 @@
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#lightbox").hidden) closeLightbox(); });
   // copy to clipboard
   function copyText(text, btn) {
-    const done = () => { if (btn) { const o = btn.innerHTML; btn.innerHTML = `<span aria-hidden="true">✓</span>`; setTimeout(() => { btn.innerHTML = o; }, 1200); } toast("Copied", { type: "ok", ms: 1200 }); };
+    const done = () => { if (btn) { const o = btn.innerHTML; btn.innerHTML = `<span aria-hidden="true">✓</span>`; setTimeout(() => { btn.innerHTML = o; }, 1200); } };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
     else fallbackCopy(text, done);
   }
@@ -1032,7 +1018,7 @@
     }, "#exSave");
   $("#exDelete").addEventListener("click", async () => {
     if (!exEditing) return;
-    const ok = await confirmAsk({ title: "Delete this shared cost?", danger: true, okLabel: "Delete", body: "" });
+    const ok = await confirmAsk({ title: "Delete this shared cost?", danger: true, okLabel: "Delete", body: "This removes the cost from the split." });
     if (!ok) return;
     closeDialog(expenseDialog);
     pushDoc(api(`/trips/${tripId}/expenses/${exEditing}`, { method: "DELETE" }), { okMsg: "Cost deleted" });

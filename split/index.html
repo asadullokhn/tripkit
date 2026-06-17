@@ -28,7 +28,6 @@
   <!-- passcode gate -->
   <div class="lock" id="lock" hidden>
     <form class="lock__card" id="lockForm">
-      <span class="lock__kicker">Split the Bill</span>
       <h2 class="lock__title">Enter passcode</h2>
       <input id="lockInput" class="lock__input" type="password" inputmode="numeric"
              pattern="[0-9]*" maxlength="32" autocomplete="off" placeholder="••••" aria-label="Passcode" />
@@ -60,7 +59,6 @@
     <div class="main-col">
       <section class="block" aria-label="People">
         <h2 class="block__title">People
-          <span class="block__hint">in this trip</span>
           <button id="addPersonBtn" class="ghost-btn ghost-btn--sm admin-only" type="button">+ Person</button>
         </h2>
         <div class="people-bar" id="peopleBar"></div>
@@ -68,7 +66,7 @@
 
       <section class="block" aria-label="Shared trip costs">
         <h2 class="block__title">Shared trip costs
-          <span class="block__hint">split among those tapped</span>
+          <span class="block__hint">tap who’s splitting</span>
           <button id="addExpenseBtn" class="ghost-btn ghost-btn--sm" type="button">+ Cost</button>
         </h2>
         <div class="shared" id="shared"></div>
@@ -104,17 +102,11 @@
         <div class="adjust">
           <div class="adjust__head">
             <h3>Manual adjustments</h3>
-            <button id="addAdjustBtn" class="ghost-btn ghost-btn--sm" type="button">+ Add</button>
+            <button id="addAdjustBtn" class="ghost-btn ghost-btn--sm" type="button">+ Adjustment</button>
           </div>
           <ul id="adjustList" class="adjust__list"></ul>
         </div>
 
-        <div class="transfers">
-          <h3>Who pays whom</h3>
-          <ul id="transfers" class="transfers__list" aria-live="polite"></ul>
-        </div>
-
-        <p class="settle__foot" id="unassignedNote"></p>
       </div>
     </aside>
   </main>
@@ -294,6 +286,6 @@
   <!-- print-only report -->
   <div id="report" class="report" aria-hidden="true"></div>
 
-  <script src="app.js?v=16"></script>
+  <script src="app.js?v=17"></script>
 </body>
 </html>
