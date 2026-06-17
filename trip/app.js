@@ -180,7 +180,6 @@
     toastBox.appendChild(t); setTimeout(() => t.classList.add("in"), 10);
     setTimeout(() => { t.classList.remove("in"); setTimeout(() => t.remove(), 300); }, 3200);
   }
-  function spin(on, msg) { const el = $("#spinner"); if (!el) return; if (msg) $("#spinMsg").textContent = msg; el.hidden = !on; }
 
   // ---------- Leaflet map ----------
   const map = L.map("map", { zoomControl: false, attributionControl: true, scrollWheelZoom: true, inertia: true, zoomSnap: 0.25 });
@@ -529,7 +528,7 @@
         </div>
       </div>`;
       const ea = $("#emptyAdd"); if (ea) ea.addEventListener("click", () => requireAuth(() => openDay(null)));
-      const eai = $("#emptyAi"); if (eai) eai.addEventListener("click", () => $("#aiBtn").click());
+      const eai = $("#emptyAi"); if (eai) eai.addEventListener("click", () => openPlan());
       return;
     }
     let gi = 0; let html = nowStripHtml() + (authed ? profileSummaryHtml() : goodToKnowHtml());
@@ -836,37 +835,30 @@
     dayDlg.close(); renderAll(); saveItin(t("common.saved", "Saved"));
   });
 
-  // trip profile dialog
-  const profileDlg = $("#profileDialog");
+  // ---------- combined plan dialog (AI generate + trip preferences) ----------
+  const planDlg = $("#planDialog");
   // build dietary chips from the vocab
   function buildDietChips() { $("#pfDietary").innerHTML = DIET_OPTS.map((k) => `<button type="button" class="chip" data-diet="${k}">${esc(dietLabel(k))}</button>`).join(""); }
   buildDietChips();
   $("#pfDietary").addEventListener("click", (e) => { const b = e.target.closest(".chip"); if (b) b.classList.toggle("on"); });
-  function openProfile() {
-    requireAuth(async () => {
-      // make sure we have the FULL profile (incl. dailyTarget/homeCurrency) before editing
-      if (!fullDoc) { try { fullDoc = await api(`/trips/${tripId}`); } catch (_) {} }
-      const p = (fullDoc && fullDoc.profile) || profile || {};
-      $("#pfStartDate").value = p.startDate || "";
-      $("#pfPace").value = p.pace || ""; $("#pfBudgetLevel").value = p.budgetLevel || "";
-      $("#pfDailyTarget").value = p.dailyTarget > 0 ? p.dailyTarget : "";
-      $("#pfInterests").value = (p.interests || []).join(", ");
-      const diet = new Set(p.dietary || []);
-      $("#pfDietary").querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", diet.has(c.dataset.diet)));
-      $("#pfAdults").value = p.adults > 0 ? p.adults : ""; $("#pfKids").value = p.kids > 0 ? p.kids : "";
-      $("#pfMobility").value = p.mobility || ""; $("#pfHomeCurrency").value = p.homeCurrency || "";
-      $("#pfErr").hidden = true;
-      profileDlg.showModal(); setTimeout(() => $("#pfStartDate").focus(), 30);
-    });
+
+  // populate the preference fields from the best profile we hold
+  function fillPrefs(p) {
+    p = p || {};
+    $("#pfStartDate").value = p.startDate || "";
+    $("#pfPace").value = p.pace || ""; $("#pfBudgetLevel").value = p.budgetLevel || "";
+    $("#pfDailyTarget").value = p.dailyTarget > 0 ? p.dailyTarget : "";
+    $("#pfInterests").value = (p.interests || []).join(", ");
+    const diet = new Set(p.dietary || []);
+    $("#pfDietary").querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", diet.has(c.dataset.diet)));
+    $("#pfAdults").value = p.adults > 0 ? p.adults : ""; $("#pfKids").value = p.kids > 0 ? p.kids : "";
+    $("#pfMobility").value = p.mobility || ""; $("#pfHomeCurrency").value = p.homeCurrency || "";
   }
-  $("#profileBtn").addEventListener("click", openProfile);
-  $("#pfCancel").addEventListener("click", () => profileDlg.close());
-  profileDlg.addEventListener("cancel", (e) => { e.preventDefault(); profileDlg.close(); });
-  $("#profileForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
+  // read the preference fields into a profile body
+  function capturePrefs() {
     const interests = $("#pfInterests").value.split(",").map((s) => s.trim()).filter(Boolean);
     const dietary = [...$("#pfDietary").querySelectorAll(".chip.on")].map((c) => c.dataset.diet);
-    const body = {
+    return {
       startDate: $("#pfStartDate").value || "",
       pace: $("#pfPace").value || "", budgetLevel: $("#pfBudgetLevel").value || "",
       dailyTarget: Math.max(0, parseInt($("#pfDailyTarget").value, 10) || 0),
@@ -875,15 +867,74 @@
       kids: Math.max(0, parseInt($("#pfKids").value, 10) || 0),
       mobility: $("#pfMobility").value || "", homeCurrency: $("#pfHomeCurrency").value.trim(),
     };
-    const go = $("#pfSave"); go.disabled = true;
+  }
+  // toggle the in-modal progress row + disable/enable the action buttons (≤100ms feedback)
+  function planBusy(on, msg) {
+    const prog = $("#planProgress");
+    if (msg) $("#planProgressText").textContent = msg;
+    prog.hidden = !on;
+    [$("#planCancel"), $("#planSavePrefs"), $("#planGo")].forEach((b) => { b.disabled = on; });
+    $("#aiDest").disabled = on; $("#aiDays").disabled = on;
+  }
+  function planErr(msg) { const el = $("#planErr"); el.textContent = msg; el.hidden = !msg; }
+  function openPlan() {
+    requireAuth(async () => {
+      // make sure we have the FULL profile (incl. dailyTarget/homeCurrency) before editing
+      if (!fullDoc) { try { fullDoc = await api(`/trips/${tripId}`); } catch (_) {} }
+      const p = (fullDoc && fullDoc.profile) || profile || {};
+      $("#aiDest").value = (data && data.trip && data.trip.name) || "";
+      $("#aiDays").value = days().length ? Math.min(14, Math.max(1, days().length)) : 3;
+      fillPrefs(p);
+      planBusy(false); planErr("");
+      $("#aiProviderHint").hidden = !(admin && aiEnabled);
+      planDlg.showModal(); setTimeout(() => $("#aiDest").focus(), 30);
+    });
+  }
+  function closePlan() { if (!$("#planGo").disabled) planDlg.close(); }   // never close mid-generate
+  $("#planCancel").addEventListener("click", closePlan);
+  planDlg.addEventListener("cancel", (e) => { e.preventDefault(); closePlan(); });
+  // backdrop tap-to-dismiss (don't dismiss while a generate is in flight)
+  planDlg.addEventListener("click", (e) => { if (e.target === planDlg && !$("#planGo").disabled) planDlg.close(); });
+
+  // Save preferences (ghost) — PUT /profile then close + toast
+  async function savePrefs() {
+    const go = $("#planSavePrefs"); go.disabled = true; planErr("");
     try {
-      fullDoc = await api(`/trips/${tripId}/profile`, { method: "PUT", body });
-      profileDlg.close(); _dateFmt = null; await reload(true); toast(t("trip.toast.profileSaved", "Trip profile saved"));
+      fullDoc = await api(`/trips/${tripId}/profile`, { method: "PUT", body: capturePrefs() });
+      planDlg.close(); _dateFmt = null; await reload(true); toast(t("trip.toast.profileSaved", "Trip profile saved"));
     } catch (err) {
-      $("#pfErr").textContent = err.code === 401 ? t("trip.toast.enterPasscode", "Enter the passcode to edit") : t("trip.toast.saveFailed", "Save failed"); $("#pfErr").hidden = false;
-      if (err.code === 401) { authed = false; profileDlg.close(); showLock(); }
+      planErr(err.code === 401 ? t("trip.toast.enterPasscode", "Enter the passcode to edit") : t("trip.toast.saveFailed", "Save failed"));
+      if (err.code === 401) { authed = false; planDlg.close(); showLock(); }
     } finally { go.disabled = false; }
+  }
+  $("#planSavePrefs").addEventListener("click", savePrefs);
+
+  // Generate (primary) — save prefs AND call generate, with in-modal progress; keep form on failure
+  $("#planForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const dest = $("#aiDest").value.trim();
+    if (!dest) { planErr(t("trip.plan.destRequired", "Destination is required")); $("#aiDest").focus(); return; }
+    planBusy(true, t("trip.plan.drafting", "✨ Drafting your itinerary…")); planErr("");
+    const prefs = capturePrefs();
+    try {
+      // persist the preferences first so the draft is tailored by them (best-effort; never blocks generate)
+      try { fullDoc = await api(`/trips/${tripId}/profile`, { method: "PUT", body: prefs }); _dateFmt = null; } catch (_) {}
+      const out = await api(`/trips/${tripId}/itinerary/generate`, { method: "POST", body: { destination: dest, days: parseInt($("#aiDays").value, 10) || 3, notes: (prefs.interests || []).join(", ") } });
+      draft = out.draft; planBusy(false); planDlg.close();
+      itin = JSON.parse(JSON.stringify(draft)); currentDay = 0; editing = false; renderAll();
+      $("#draftBanner").hidden = false;
+    } catch (err) {
+      planBusy(false);   // re-enable; keeps the populated form intact
+      planErr(err.code === 503 ? t("trip.ai.errNotConfigured", "AI isn't configured on the server.")
+        : (err.code === 504 || err.code === 408) ? t("trip.ai.errTimeout", "Timed out — try again.")
+        : err.code === 401 ? t("trip.ai.errAdmin", "Log in as admin.")
+        : t("trip.ai.errFailed", "Generation failed."));
+      if (err.code === 401) { authed = false; planDlg.close(); showLock(); }
+    }
   });
+
+  $("#profileBtn").addEventListener("click", openPlan);
+  $("#aiBtn").addEventListener("click", openPlan);
 
   // ---------- share ----------
   function shareTrip(di) {
@@ -951,38 +1002,10 @@
     } catch (err) { $("#costErr").textContent = err.code === 401 ? t("trip.cost.passcodeNeeded", "Passcode needed") : t("trip.cost.couldntLink", "Couldn't link"); $("#costErr").hidden = false; }
   });
 
-  // ---------- AI generate ----------
-  const aiDlg = $("#aiDialog");
-  function hasProfileSignal() {
-    const p = (fullDoc && fullDoc.profile) || profile; if (!p) return false;
-    return !!(p.pace || p.budgetLevel || (p.interests || []).length || (p.dietary || []).length || p.mobility || p.startDate || p.adults || p.kids);
-  }
-  $("#aiBtn").addEventListener("click", () => {
-    $("#aiDest").value = data && data.trip ? data.trip.name : ""; $("#aiDays").value = 3;
-    const p = (fullDoc && fullDoc.profile) || profile;
-    $("#aiNotes").value = (p && (p.interests || []).length) ? (p.interests || []).join(", ") : "";
-    $("#aiProfileHint").hidden = !hasProfileSignal();
-    $("#aiErr").hidden = true; aiDlg.showModal(); setTimeout(() => $("#aiDest").focus(), 30);
-  });
-  $("#aiCancel").addEventListener("click", () => aiDlg.close());
-  aiDlg.addEventListener("cancel", (e) => { e.preventDefault(); aiDlg.close(); });
-  $("#aiForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const dest = $("#aiDest").value.trim(); if (!dest) return;
-    const go = $("#aiGo"); go.disabled = true; spin(true, t("trip.ai.drafting", "Drafting your itinerary…"));
-    try {
-      const out = await api(`/trips/${tripId}/itinerary/generate`, { method: "POST", body: { destination: dest, days: parseInt($("#aiDays").value, 10) || 3, notes: $("#aiNotes").value.trim() } });
-      draft = out.draft; aiDlg.close();
-      itin = JSON.parse(JSON.stringify(draft)); currentDay = 0; editing = false; renderAll();
-      $("#draftBanner").hidden = false;
-    } catch (err) {
-      $("#aiErr").textContent = err.code === 503 ? t("trip.ai.errNotConfigured", "AI isn't configured on the server.") : err.code === 504 ? t("trip.ai.errTimeout", "Timed out — try again.") : err.code === 401 ? t("trip.ai.errAdmin", "Log in as admin.") : t("trip.ai.errFailed", "Generation failed.");
-      $("#aiErr").hidden = false;
-    } finally { go.disabled = false; spin(false); }
-  });
+  // ---------- AI draft review (banner) ----------
   function endDraft() { draft = null; $("#draftBanner").hidden = true; }
   $("#draftDiscard").addEventListener("click", () => { endDraft(); reload(true); });
-  $("#draftRegen").addEventListener("click", () => { endDraft(); $("#aiBtn").click(); });
+  $("#draftRegen").addEventListener("click", () => { endDraft(); openPlan(); });
   $("#draftReplace").addEventListener("click", async () => {
     if (!(await confirmAsk(t("trip.draft.replaceConfirmTitle", "Replace itinerary?"), t("trip.draft.replaceConfirmBody", "This overwrites the entire saved plan with the AI draft."), t("trip.draft.replace", "Replace"), true))) return;
     itin = JSON.parse(JSON.stringify(draft)); endDraft(); await saveItin(t("trip.toast.itinSaved", "Itinerary saved"));
@@ -1096,7 +1119,7 @@
   window.addEventListener("i18n:change", () => {
     // rebuild dialog selects/chips only while their dialogs are closed (avoids wiping in-progress edits)
     if (!stopDlg.open) buildStopSelects();
-    if (!profileDlg.open) buildDietChips();
+    if (!planDlg.open) buildDietChips();
     if (data || itin) renderAll();
   });
   boot();

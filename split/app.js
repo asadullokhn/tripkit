@@ -889,11 +889,12 @@
     const c = compute();
     const onItems = (doc.receipts || []).reduce((n, rc) => n + (rc.items || []).filter((it) => (it.sharedBy || []).includes(pnEditing)).length, 0);
     const itemsNote = onItems ? (onItems > 1 ? I18N.t("split.confirm.deletePersonItemsMany", " ({n} items)", { n: onItems }) : I18N.t("split.confirm.deletePersonItemsOne", " ({n} item)", { n: onItems })) : "";
+    const pid = pnEditing;
+    closeDialog(personDialog);   // avoid modal-on-modal: close the editor before confirming
     const ok = await confirmAsk({ title: I18N.t("split.confirm.deletePersonTitle", "Delete this person?"), danger: true, okLabel: I18N.t("common.delete", "Delete"),
-      body: I18N.t("split.confirm.deletePersonBody", "<b>{name}</b> will be removed from all splits{items}. Their share is redistributed to the others.", { name: esc(pname(pnEditing)), items: itemsNote }) });
+      body: I18N.t("split.confirm.deletePersonBody", "<b>{name}</b> will be removed from all splits{items}. Their share is redistributed to the others.", { name: esc(pname(pid)), items: itemsNote }) });
     if (!ok) return;
-    closeDialog(personDialog);
-    pushDoc(api(`/trips/${tripId}/people/${pnEditing}`, { method: "DELETE" }), { okMsg: I18N.t("split.toast.personRemoved", "Person removed") });
+    pushDoc(api(`/trips/${tripId}/people/${pid}`, { method: "DELETE" }), { okMsg: I18N.t("split.toast.personRemoved", "Person removed") });
   });
 
   // ---------- receipt dialog (manual + OCR draft) ----------
@@ -957,10 +958,11 @@
     }, "#rcSave");
   $("#rcDelete").addEventListener("click", async () => {
     if (!rcEditing) return;
+    const rid = rcEditing;
+    closeDialog(receiptDialog);   // avoid modal-on-modal: close the editor before confirming
     const ok = await confirmAsk({ title: I18N.t("split.confirm.deleteReceiptTitle", "Delete this receipt?"), danger: true, okLabel: I18N.t("common.delete", "Delete"), body: I18N.t("split.confirm.deleteReceiptBody", "This removes the receipt and its items from the split.") });
     if (!ok) return;
-    closeDialog(receiptDialog);
-    pushDoc(api(`/trips/${tripId}/receipts/${rcEditing}`, { method: "DELETE" }), { okMsg: I18N.t("split.toast.receiptDeleted", "Receipt deleted") });
+    pushDoc(api(`/trips/${tripId}/receipts/${rid}`, { method: "DELETE" }), { okMsg: I18N.t("split.toast.receiptDeleted", "Receipt deleted") });
   });
 
   // ---------- expense dialog ----------
@@ -1056,10 +1058,11 @@
     }, "#exSave");
   $("#exDelete").addEventListener("click", async () => {
     if (!exEditing) return;
+    const eid = exEditing;
+    closeDialog(expenseDialog);   // avoid modal-on-modal: close the editor before confirming
     const ok = await confirmAsk({ title: I18N.t("split.confirm.deleteCostTitle", "Delete this shared cost?"), danger: true, okLabel: I18N.t("common.delete", "Delete"), body: I18N.t("split.confirm.deleteCostBody", "This removes the cost from the split.") });
     if (!ok) return;
-    closeDialog(expenseDialog);
-    pushDoc(api(`/trips/${tripId}/expenses/${exEditing}`, { method: "DELETE" }), { okMsg: I18N.t("split.toast.costDeleted", "Cost deleted") });
+    pushDoc(api(`/trips/${tripId}/expenses/${eid}`, { method: "DELETE" }), { okMsg: I18N.t("split.toast.costDeleted", "Cost deleted") });
   });
 
   // ---------- adjustment dialog ----------

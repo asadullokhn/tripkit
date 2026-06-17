@@ -9,8 +9,8 @@
   --line:       #1f4248;
   --line-soft:  #1a373d;
   --text:       #eaf4f1;
-  --muted:      #8aa6a3;
-  --faint:      #8aa49c;
+  --muted:      #9bb6b1;   /* >=4.5:1 on the card surfaces */
+  --faint:      #a3bcb4;   /* micro/mono labels — bumped UP to clear AA on the lighter card-2 surface */
 
   --sun:        #ffb454;   /* mango */
   --coral:      #ff6f59;   /* sunset coral */
@@ -34,6 +34,8 @@
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
+/* tap feedback: kill the iOS grey flash, rely on :active / :focus-visible styles instead */
+button, a, input, select, .chip, .pbar-chip, .swatch, .picker-row, .assign, summary { -webkit-tap-highlight-color: transparent; }
 body {
   margin: 0;
   font-family: var(--body);
@@ -162,7 +164,7 @@ h1,h2,h3 { font-family: var(--display); font-weight: 700; margin: 0; letter-spac
 @media (max-width: 919px) {
   .settle {
     position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 40;
-    transform: translateY(105%); transition: transform .32s cubic-bezier(.4,.9,.3,1);
+    transform: translateY(105%); transition: transform .28s cubic-bezier(.4,.9,.3,1);
     max-height: 82dvh;
   }
   .settle.open { transform: translateY(0); }
@@ -171,11 +173,12 @@ h1,h2,h3 { font-family: var(--display); font-weight: 700; margin: 0; letter-spac
   background: linear-gradient(180deg, var(--card-2), var(--ink-2));
   border: 1px solid var(--line); border-radius: var(--r-lg);
   padding: 18px; box-shadow: var(--shadow);
-  max-height: inherit; overflow-y: auto;
+  max-height: inherit; overflow-y: auto; overscroll-behavior: contain;
 }
 @media (max-width: 919px) {
   .settle__inner { border-radius: var(--r-lg) var(--r-lg) 0 0; border-bottom: 0;
-    padding-bottom: calc(22px + var(--safe-b)); }
+    padding-bottom: calc(22px + var(--safe-b));
+    padding-left: max(18px, env(safe-area-inset-left)); padding-right: max(18px, env(safe-area-inset-right)); }
 }
 .settle__title { font-size: 1.3rem; margin-bottom: 14px; }
 .settle__title::after { content: ""; display:block; width: 42px; height: 3px; border-radius: 9px; margin-top: 8px;
@@ -224,6 +227,10 @@ h1,h2,h3 { font-family: var(--display); font-weight: 700; margin: 0; letter-spac
 .solid-btn { appearance: none; border: 0; cursor: pointer; font-family: var(--body); font-weight: 700; font-size: .86rem;
   padding: 9px 18px; border-radius: 99px; color: #2a160a; background: linear-gradient(95deg, var(--gold), var(--sun)); }
 .solid-btn:hover { filter: brightness(1.06); }
+/* press feedback (paired with -webkit-tap-highlight-color: transparent) */
+.ghost-btn:active, .solid-btn:active, .mini-btn:active, .seg__btn:active,
+button.pbar-chip:active, .picker-row:active, .assign:active,
+.copy-btn:active, .verify-btn:active, .link-btn:active { transform: scale(.97); }
 
 /* ---------- mobile FAB ---------- */
 .settle-fab {
@@ -232,6 +239,7 @@ h1,h2,h3 { font-family: var(--display); font-weight: 700; margin: 0; letter-spac
   background: linear-gradient(95deg, var(--coral), var(--sun)); color: #2a160a; font-weight: 800; font-family: var(--display);
   box-shadow: 0 14px 34px -10px rgba(255,111,89,.6); cursor: pointer; user-select: none;
 }
+.settle-fab:active { transform: translateX(-50%) scale(.97); }
 .settle-fab__chevron { font-size: .8rem; }
 .settle-fab.up .settle-fab__chevron { transform: rotate(180deg); }
 /* while the sheet is open the FAB is redundant and was overlapping the sheet's
@@ -273,7 +281,8 @@ h1,h2,h3 { font-family: var(--display); font-weight: 700; margin: 0; letter-spac
 .sync.offline .sync__dot { background: var(--bad); box-shadow: 0 0 7px var(--bad); }
 .sync.live #syncLabel { color: var(--good); }
 .sync.offline #syncLabel { color: var(--bad); }
-@media (max-width: 560px) { #syncLabel { display: none; } }
+/* keep the textual status (not color alone) — only drop the neutral "syncing…" word on tiny screens */
+@media (max-width: 420px) { .sync:not(.live):not(.offline) #syncLabel { display: none; } }
 
 /* ---------- passcode lock ---------- */
 .lock { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 24px;
@@ -438,7 +447,7 @@ button.pbar-chip:hover { border-color: var(--c, var(--teal)); transform: transla
 .dialog--wide { width: min(94vw, 460px); }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .field-row .field { margin: 0; }
-.dialog__form { max-height: 86dvh; overflow-y: auto; }
+.dialog__form { max-height: 86dvh; overflow-y: auto; overscroll-behavior: contain; }
 
 /* receipt item editor rows */
 .rc-items { display: grid; gap: 7px; margin-bottom: 8px; }
@@ -521,7 +530,7 @@ button.pbar-chip:hover { border-color: var(--c, var(--teal)); transform: transla
 .picker-search:focus { outline: none; border-color: var(--teal); }
 .picker-tools { display: flex; align-items: center; gap: 8px; }
 .picker-count { margin-left: auto; font-family: var(--mono); font-size: .7rem; color: var(--muted); }
-.picker-list { display: grid; gap: 5px; max-height: 46dvh; overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
+.picker-list { display: grid; gap: 5px; max-height: 46dvh; overflow-y: auto; overscroll-behavior: contain; margin: 0 -4px; padding: 0 4px; }
 .picker-row { appearance: none; cursor: pointer; display: flex; align-items: center; gap: 11px; width: 100%; text-align: left;
   background: var(--ink); border: 1px solid var(--line-soft); border-radius: var(--r-sm); padding: 9px 12px;
   color: var(--text); font-family: var(--body); font-size: .92rem; min-height: 44px; transition: border-color .12s; }
@@ -552,11 +561,21 @@ button.pbar-chip:hover { border-color: var(--c, var(--teal)); transform: transla
 .settled-group[open] > summary::before { content: "▾ "; }
 .settled-group .person { margin-top: 6px; }
 
-/* swatch focus ring (radiogroup) */
+/* visible focus ring on every interactive element */
 .swatch:focus-visible, .picker-row:focus-visible, .assign:focus-visible, .seg__btn:focus-visible,
 .chip:focus-visible, .edit-btn:focus-visible, .mini-btn:focus-visible,
 .ghost-btn:focus-visible, .solid-btn:focus-visible, .copy-btn:focus-visible, .link-btn:focus-visible,
-.payout-edit:focus-visible, .adjust__del:focus-visible, .verify-btn:focus-visible, .ri-del:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.payout-edit:focus-visible, .adjust__del:focus-visible, .verify-btn:focus-visible, .ri-del:focus-visible,
+button.pbar-chip:focus-visible, .sheet-grip:focus-visible, .settle-fab:focus-visible,
+.lightbox__close:focus-visible, .toast__action:focus-visible, .settled-group > summary:focus-visible,
+a.brand__home:focus-visible, a.brand__plan:focus-visible,
+#langHost select:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; border-radius: var(--r-sm); }
+
+/* inputs: keep the teal border on :focus but add a clear ring on keyboard focus */
+.field input:focus-visible, .field select:focus-visible, .lock__input:focus-visible,
+.rc-item input:focus-visible, .ex-part .ex-share:focus-visible, .picker-search:focus-visible {
+  outline: 2px solid var(--teal); outline-offset: 1px; border-color: var(--teal);
+}
 
 /* touch targets: only on touch devices, so desktop look is unchanged */
 @media (pointer: coarse) {
@@ -564,13 +583,21 @@ button.pbar-chip:hover { border-color: var(--c, var(--teal)); transform: transla
   .ghost-btn--sm { min-height: 44px; }
   .edit-btn { width: 44px; height: 44px; }
   .ri-del, .adjust__del { min-width: 44px; min-height: 44px; }
-  .rc-item input, .field input, .field select, .ex-share, .picker-search { min-height: 42px; }
-  .swatch { width: 36px; height: 36px; }
+  .rc-item input, .field input, .field select, .ex-share, .picker-search { min-height: 44px; }
+  .swatch { width: 44px; height: 44px; }
+  /* interactive chips + tappable people-bar chips reach the HIG minimum */
+  .chip, button.pbar-chip { min-height: 44px; }
+  /* the toast action and proof lightbox close are real controls */
+  .toast__action { min-height: 44px; min-width: 44px; }
+  .settled-group > summary { min-height: 44px; display: flex; align-items: center; }
 }
 
 /* safe-area (landscape notches) */
 .settle-fab { margin-left: env(safe-area-inset-left, 0px); margin-right: env(safe-area-inset-right, 0px); }
-@media (max-width: 919px) { .layout { padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); } }
+@media (max-width: 919px) {
+  .layout { padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); }
+  .topbar { padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); }
+}
 
 /* ============================================================
    Settlement plan — bank details, proof, verify (payment tracking)

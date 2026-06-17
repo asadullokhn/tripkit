@@ -22,7 +22,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <link rel="stylesheet" href="/shared/tokens.css?v=1" />
-  <link rel="stylesheet" href="styles.css?v=20260617j" />
+  <link rel="stylesheet" href="styles.css?v=20260617k" />
   <script src="/shared/i18n.js?v=1"></script>
 </head>
 <body>
@@ -158,60 +158,54 @@
     </form>
   </dialog>
 
-  <!-- trip profile dialog -->
-  <dialog id="profileDialog" class="dlg" aria-labelledby="profileTitle">
-    <form class="dlg__form" id="profileForm">
-      <h3 class="dlg__title" id="profileTitle" data-i18n="trip.profile.title">Trip profile</h3>
-      <div class="fld-row">
-        <label class="fld"><span data-i18n="trip.profile.startDate">Start date</span><input id="pfStartDate" type="date" /></label>
-        <label class="fld"><span data-i18n="trip.profile.pace">Pace</span><select id="pfPace">
-          <option value="">—</option><option value="relaxed" data-i18n="trip.profile.paceRelaxed">Relaxed</option><option value="balanced" data-i18n="trip.profile.paceBalanced">Balanced</option><option value="packed" data-i18n="trip.profile.pacePacked">Packed</option>
-        </select></label>
+  <!-- combined plan dialog: AI generate + trip preferences -->
+  <dialog id="planDialog" class="dlg dlg--plan" aria-labelledby="planTitle">
+    <form class="dlg__form" id="planForm">
+      <h3 class="dlg__title" id="planTitle" data-i18n="trip.plan.title">Generate with AI</h3>
+
+      <label class="fld"><span data-i18n="trip.ai.destination">Destination</span><input id="aiDest" type="text" maxlength="80" placeholder="e.g. Ubud, Bali" data-i18n-ph="trip.ai.destinationPh" autocomplete="off" required /></label>
+      <label class="fld"><span data-i18n="trip.ai.days">Days</span><input id="aiDays" type="number" min="1" max="14" value="3" inputmode="numeric" /></label>
+
+      <div class="dlg__section">
+        <h4 class="dlg__subhead" data-i18n="trip.plan.prefsHead">Preferences — tailor the plan</h4>
+        <p class="dlg__hint" data-i18n="trip.plan.prefsHint">Saved to the trip and used to tailor the AI.</p>
       </div>
-      <div class="fld-row">
-        <label class="fld"><span data-i18n="trip.profile.budgetLevel">Budget level</span><select id="pfBudgetLevel">
-          <option value="">—</option><option value="shoestring" data-i18n="trip.profile.budgetShoestring">Shoestring</option><option value="mid" data-i18n="trip.profile.budgetMid">Mid</option><option value="comfort" data-i18n="trip.profile.budgetComfort">Comfort</option><option value="lux" data-i18n="trip.profile.budgetLux">Lux</option>
-        </select></label>
-        <label class="fld"><span data-i18n="trip.profile.dailyTarget">Daily target (Rp)</span><input id="pfDailyTarget" type="number" min="0" step="1000" inputmode="numeric" placeholder="0" /></label>
-      </div>
-      <label class="fld"><span data-i18n="trip.profile.interests">Interests (comma-separated)</span><input id="pfInterests" type="text" maxlength="200" placeholder="waterfalls, food, temples" data-i18n-ph="trip.profile.interestsPh" /></label>
+
+      <label class="fld"><span data-i18n="trip.profile.startDate">Start date</span><input id="pfStartDate" type="date" autocomplete="off" /></label>
+      <label class="fld"><span data-i18n="trip.profile.pace">Pace</span><select id="pfPace">
+        <option value="">—</option><option value="relaxed" data-i18n="trip.profile.paceRelaxed">Relaxed</option><option value="balanced" data-i18n="trip.profile.paceBalanced">Balanced</option><option value="packed" data-i18n="trip.profile.pacePacked">Packed</option>
+      </select></label>
+      <label class="fld"><span data-i18n="trip.profile.budgetLevel">Budget level</span><select id="pfBudgetLevel">
+        <option value="">—</option><option value="shoestring" data-i18n="trip.profile.budgetShoestring">Shoestring</option><option value="mid" data-i18n="trip.profile.budgetMid">Mid</option><option value="comfort" data-i18n="trip.profile.budgetComfort">Comfort</option><option value="lux" data-i18n="trip.profile.budgetLux">Lux</option>
+      </select></label>
+      <label class="fld"><span data-i18n="trip.profile.dailyTarget">Daily target (Rp)</span><input id="pfDailyTarget" type="number" min="0" step="1000" inputmode="numeric" placeholder="0" /></label>
+      <label class="fld"><span data-i18n="trip.profile.interests">Interests (comma-separated)</span><input id="pfInterests" type="text" maxlength="200" placeholder="waterfalls, food, temples" data-i18n-ph="trip.profile.interestsPh" autocomplete="off" /></label>
       <div class="fld">
         <span data-i18n="trip.profile.dietary">Dietary</span>
         <div class="chip-pick" id="pfDietary"></div>
       </div>
-      <div class="fld-row">
-        <label class="fld"><span data-i18n="trip.profile.adults">Adults</span><input id="pfAdults" type="number" min="0" step="1" inputmode="numeric" placeholder="0" /></label>
-        <label class="fld"><span data-i18n="trip.profile.kids">Kids</span><input id="pfKids" type="number" min="0" step="1" inputmode="numeric" placeholder="0" /></label>
-      </div>
-      <div class="fld-row">
-        <label class="fld"><span data-i18n="trip.profile.mobility">Mobility</span><select id="pfMobility">
-          <option value="">—</option><option value="easy" data-i18n="trip.profile.mobilityEasy">Easy</option><option value="moderate" data-i18n="trip.profile.mobilityModerate">Moderate</option><option value="active" data-i18n="trip.profile.mobilityActive">Active</option>
-        </select></label>
-        <label class="fld"><span data-i18n="trip.profile.homeCurrency">Home currency</span><input id="pfHomeCurrency" type="text" maxlength="8" placeholder="USD" /></label>
-      </div>
-      <p class="fld__err" id="pfErr" role="alert" hidden></p>
-      <div class="dlg__actions">
-        <button type="button" class="eb-btn" id="pfCancel" data-i18n="common.cancel">Cancel</button>
-        <button type="submit" class="solid-btn solid-btn--sm" id="pfSave" data-i18n="common.save">Save</button>
-      </div>
-    </form>
-  </dialog>
+      <label class="fld"><span data-i18n="trip.profile.adults">Adults</span><input id="pfAdults" type="number" min="0" step="1" inputmode="numeric" placeholder="0" /></label>
+      <label class="fld"><span data-i18n="trip.profile.kids">Kids</span><input id="pfKids" type="number" min="0" step="1" inputmode="numeric" placeholder="0" /></label>
+      <label class="fld"><span data-i18n="trip.profile.mobility">Mobility</span><select id="pfMobility">
+        <option value="">—</option><option value="easy" data-i18n="trip.profile.mobilityEasy">Easy</option><option value="moderate" data-i18n="trip.profile.mobilityModerate">Moderate</option><option value="active" data-i18n="trip.profile.mobilityActive">Active</option>
+      </select></label>
+      <label class="fld"><span data-i18n="trip.profile.homeCurrency">Home currency</span><input id="pfHomeCurrency" type="text" maxlength="8" placeholder="USD" autocomplete="off" /></label>
 
-  <!-- AI generate dialog -->
-  <dialog id="aiDialog" class="dlg" aria-labelledby="aiTitle">
-    <form class="dlg__form" id="aiForm">
-      <h3 class="dlg__title" id="aiTitle" data-i18n="trip.ai.title">Generate itinerary with AI</h3>
-      <label class="fld"><span data-i18n="trip.ai.destination">Destination</span><input id="aiDest" type="text" maxlength="80" placeholder="e.g. Ubud, Bali" data-i18n-ph="trip.ai.destinationPh" required /></label>
-      <div class="fld-row">
-        <label class="fld"><span data-i18n="trip.ai.days">Days</span><input id="aiDays" type="number" min="1" max="14" value="3" /></label>
-        <label class="fld"><span data-i18n="trip.ai.notes">Notes (optional)</span><input id="aiNotes" type="text" maxlength="120" placeholder="waterfalls, cafes…" data-i18n-ph="trip.ai.notesPh" /></label>
+      <p class="dlg__hint" id="aiProviderHint" hidden data-i18n="trip.ai.providerHint">The destination &amp; preferences are sent to the configured AI provider.</p>
+
+      <!-- in-modal progress (indeterminate) -->
+      <div class="dlg__progress" id="planProgress" role="status" aria-live="polite" hidden>
+        <div class="dlg__progbar" aria-hidden="true"><span></span></div>
+        <span class="dlg__progtext" id="planProgressText" data-i18n="trip.plan.drafting">✨ Drafting your itinerary…</span>
       </div>
-      <p class="dlg__hint" id="aiProfileHint" hidden data-i18n="trip.ai.profileHint">✨ Using your trip profile (pace, budget, diet, group).</p>
-      <p class="dlg__hint" data-i18n="trip.ai.providerHint">The destination &amp; notes are sent to the configured AI provider.</p>
-      <p class="fld__err" id="aiErr" role="alert" hidden></p>
-      <div class="dlg__actions">
-        <button type="button" class="eb-btn" id="aiCancel" data-i18n="common.cancel">Cancel</button>
-        <button type="submit" class="solid-btn solid-btn--sm" id="aiGo" data-i18n="trip.ai.generate">Generate</button>
+
+      <p class="fld__err" id="planErr" role="alert" hidden></p>
+
+      <div class="dlg__actions dlg__actions--plan">
+        <button type="button" class="eb-btn" id="planCancel" data-i18n="common.cancel">Cancel</button>
+        <span class="dlg__spacer"></span>
+        <button type="button" class="eb-btn" id="planSavePrefs" data-i18n="trip.plan.savePrefs">Save preferences</button>
+        <button type="submit" class="solid-btn solid-btn--sm" id="planGo" data-i18n="trip.ai.generate">Generate</button>
       </div>
     </form>
   </dialog>
@@ -250,11 +244,6 @@
     </div>
   </dialog>
 
-  <!-- spinner overlay -->
-  <div class="spin-overlay" id="spinner" role="status" aria-live="polite" hidden>
-    <div class="spin" aria-hidden="true"></div><span id="spinMsg" data-i18n="common.working">Working…</span>
-  </div>
-
-  <script src="app.js?v=20260617j"></script>
+  <script src="app.js?v=20260617k"></script>
 </body>
 </html>
