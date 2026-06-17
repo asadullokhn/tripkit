@@ -125,6 +125,21 @@ type Settlement struct {
 	Transfers   []Transfer `json:"transfers"`
 }
 
+// Trip-wide planning preferences. Drives the AI generator and the budget UI.
+// DailyTarget and HomeCurrency are SENSITIVE (money) — never exposed on the public page.
+type Profile struct {
+	StartDate    string   `json:"startDate,omitempty"`   // ISO yyyy-mm-dd
+	Pace         string   `json:"pace,omitempty"`        // relaxed|balanced|packed
+	BudgetLevel  string   `json:"budgetLevel,omitempty"` // shoestring|mid|comfort|lux
+	DailyTarget  int      `json:"dailyTarget,omitempty"` // minor units (whole IDR); SENSITIVE
+	Interests    []string `json:"interests,omitempty"`
+	Dietary      []string `json:"dietary,omitempty"` // e.g. halal, veg, vegan
+	Adults       int      `json:"adults,omitempty"`
+	Kids         int      `json:"kids,omitempty"`
+	Mobility     string   `json:"mobility,omitempty"`     // easy|moderate|active
+	HomeCurrency string   `json:"homeCurrency,omitempty"` // SENSITIVE
+}
+
 // The whole trip document — one JSON file per trip.
 type TripDoc struct {
 	Trip        Trip         `json:"trip"`
@@ -133,6 +148,7 @@ type TripDoc struct {
 	Expenses    []Expense    `json:"expenses"`
 	Adjustments []Adjustment `json:"adjustments"`
 	Itinerary   *Itinerary   `json:"itinerary,omitempty"`
+	Profile     *Profile     `json:"profile,omitempty"`
 	Settlement  *Settlement  `json:"settlement,omitempty"`
 	Rev         int          `json:"rev"`
 	UpdatedAt   string       `json:"updatedAt"`

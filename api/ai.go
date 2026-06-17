@@ -30,16 +30,24 @@ Schema:
       "stops": [
         {
           "name": string,
-          "type": string,     // one of: start|fuel|food|breakfast|hotel|beach|viewpoint|waterfall|garden|palace|museum|activity|finish
-          "note": string,     // 1 short practical sentence (tips, cost hints, timing)
-          "lat": number,      // best-known latitude; 0 if unknown
-          "lng": number       // best-known longitude; 0 if unknown
+          "type": string,        // one of: start|fuel|food|breakfast|hotel|beach|viewpoint|waterfall|garden|palace|museum|activity|finish
+          "note": string,        // 1 short practical sentence (tips, cost hints, timing)
+          "lat": number,         // best-known latitude; 0 if unknown
+          "lng": number,         // best-known longitude; 0 if unknown
+          "mode": string,        // how you ARRIVE here, one of: car|scooter|taxi|public|bike|walk|boat|flight
+          "durationMin": number, // planned visit length in minutes (integer, >=0)
+          "cost": number,        // estimated TOTAL cost for the whole group in whole IDR (integer, 0 if free/unknown)
+          "links": {
+            "maps":    string,   // Google Maps search URL: https://www.google.com/maps/search/?api=1&query=<url-encoded place name>
+            "booking": string,   // Agoda/Booking search or deep link for hotel-type stops, else ""
+            "tickets": string    // official-site or ticket-search link for paid attractions, else ""
+          }
         }
       ]
     }
   ]
 }
-Rules: realistic, geographically sensible ordering; 3-6 stops per day; include the start, lodging, and food stops; concise notes; valid coordinates where you know them, else 0. Output ONLY the JSON object.`
+Rules: realistic, geographically sensible ordering; 3-6 stops per day; include the start, lodging, and food stops; concise notes; valid coordinates where you know them, else 0. Always set a sensible mode and durationMin per stop; estimate cost for the whole group in whole IDR (0 if free). Build the maps link from the place name exactly as specified. Output ONLY the JSON object.`
 
 func handleGenerateItinerary(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -52,7 +60,8 @@ func handleGenerateItinerary(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusServiceUnavailable, "ai not configured (set DEEPSEEK_API_KEY, DEEPSEEK_API_BASE, DEEPSEEK_MODEL)")
 		return
 	}
-	if _, err := store.get(id); err != nil {
+	doc, err := store.get(id)
+	if err != nil {
 		notFound(w)
 		return
 	}
@@ -73,8 +82,11 @@ func handleGenerateItinerary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userMsg := fmt.Sprintf("Destination: %s\nNumber of days: %d", in.Destination, in.Days)
+	if block := profilePrompt(doc.Profile); block != "" {
+		userMsg += "\n" + block
+	}
 	if strings.TrimSpace(in.Notes) != "" {
-		userMsg += "\nPreferences: " + in.Notes
+		userMsg += "\nAdditional notes: " + in.Notes
 	}
 
 	reqBody := map[string]any{
@@ -134,11 +146,87 @@ func handleGenerateItinerary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// assign ids so the client can edit immediately; this is a DRAFT (not saved).
+	// also normalize/clamp the new per-stop fields the model returns.
 	for di := range draft.Days {
 		draft.Days[di].ID = "d" + randID(4)
 		for si := range draft.Days[di].Stops {
-			draft.Days[di].Stops[si].ID = "s" + randID(4)
+			s := &draft.Days[di].Stops[si]
+			s.ID = "s" + randID(4)
+			if !validMode(s.Mode) {
+				s.Mode = "car"
+			}
+			if s.DurationMin < 0 {
+				s.DurationMin = 0
+			}
+			if s.Cost < 0 {
+				s.Cost = 0
+			}
 		}
 	}
 	writeJSON(w, map[string]any{"draft": draft})
+}
+
+func validMode(m string) bool {
+	switch m {
+	case "car", "scooter", "taxi", "public", "bike", "walk", "boat", "flight":
+		return true
+	}
+	return false
+}
+
+// profilePrompt turns the trip Profile into a deterministic preferences block
+// appended to the user prompt. Nil-safe. Money fields are never sent.
+func profilePrompt(p *Profile) string {
+	if p == nil {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("Traveller preferences (honor these):")
+	switch p.Pace {
+	case "relaxed":
+		b.WriteString("\n- Pace: relaxed — keep it light, 2-3 stops per day, unhurried.")
+	case "packed":
+		b.WriteString("\n- Pace: packed — fit in more, 5-6 stops per day.")
+	case "balanced":
+		b.WriteString("\n- Pace: balanced — about 4 stops per day.")
+	}
+	switch p.BudgetLevel {
+	case "shoestring":
+		b.WriteString("\n- Budget: shoestring — favor free/cheap stops, warungs and street food; note frugal tips.")
+	case "mid":
+		b.WriteString("\n- Budget: mid-range — sensible mix of value and comfort.")
+	case "comfort":
+		b.WriteString("\n- Budget: comfort — nicer venues are fine; prioritize good experiences over saving.")
+	case "lux":
+		b.WriteString("\n- Budget: luxury — premium venues, fine dining and high-end stays welcome.")
+	}
+	if len(p.Interests) > 0 {
+		b.WriteString("\n- Interests: " + strings.Join(p.Interests, ", ") + " — bias stop selection toward these.")
+	}
+	if len(p.Dietary) > 0 {
+		b.WriteString("\n- Dietary (HARD CONSTRAINT): " + strings.Join(p.Dietary, ", ") +
+			". Only suggest venues that satisfy this — e.g. if halal, never suggest non-halal or pork venues.")
+	}
+	if p.Adults > 0 || p.Kids > 0 {
+		b.WriteString(fmt.Sprintf("\n- Group: %d adult(s), %d kid(s).", p.Adults, p.Kids))
+		if p.Kids > 0 {
+			b.WriteString(" Keep stops kid-friendly and age-appropriate.")
+		}
+	}
+	switch p.Mobility {
+	case "easy":
+		b.WriteString("\n- Mobility: easy — avoid hard hikes, long treks or many stairs; prefer accessible stops.")
+	case "moderate":
+		b.WriteString("\n- Mobility: moderate — some walking is fine, avoid strenuous treks.")
+	case "active":
+		b.WriteString("\n- Mobility: active — hikes and physical activities are welcome.")
+	}
+	if strings.TrimSpace(p.StartDate) != "" {
+		b.WriteString("\n- Start date: " + p.StartDate +
+			" — account for season (wet/dry) and the weekday (weekend crowds, closures).")
+	}
+	if b.Len() == len("Traveller preferences (honor these):") {
+		return ""
+	}
+	return b.String()
 }

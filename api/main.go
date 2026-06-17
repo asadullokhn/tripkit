@@ -113,6 +113,9 @@ func main() {
 	mux.HandleFunc("DELETE /api/trips/{id}/itinerary", requireAdmin(handleItineraryDelete))
 	mux.HandleFunc("POST /api/trips/{id}/itinerary/generate", requireAdmin(handleGenerateItinerary))
 
+	// trip planning profile (pace/budget/interests/...) — editor tier
+	mux.HandleFunc("PUT /api/trips/{id}/profile", requireEditor(handleProfilePut))
+
 	// OCR — editor tier (any passcode user can upload a receipt photo);
 	// rate-limited per IP since it costs money and leaves the box.
 	mux.HandleFunc("POST /api/ocr", requireEditor(handleOCR))

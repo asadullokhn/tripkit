@@ -16,8 +16,9 @@
   // --- state ---
   let pass = localStorage.getItem(PASS_KEY) || "";
   let admin = false, aiEnabled = false, authed = false, editing = false;
-  let data = null;       // { trip, people, itinerary, rev } from the public endpoint
+  let data = null;       // { trip, people, itinerary, profile?, rev } from the public endpoint
   let itin = { title: "", days: [] };
+  let profile = null;    // sanitized (public) or full (authed) trip profile
   let fullDoc = null;    // full trip doc (expenses/receipts) once authed — for cost links
   let draft = null;      // AI draft under review
   let currentDay = 0;    // index or "all"
@@ -58,6 +59,97 @@
   }
   const hasPin = (s) => Number.isFinite(s.lat) && Number.isFinite(s.lng) && (s.lat !== 0 || s.lng !== 0);
 
+  // ---------- profile vocab + helpers ----------
+  const PACE_LABEL = { relaxed: "Relaxed", balanced: "Balanced", packed: "Packed" };
+  const BUDGET_LABEL = { shoestring: "Shoestring", mid: "Mid", comfort: "Comfort", lux: "Lux" };
+  const MOBILITY_LABEL = { easy: "Easy pace", moderate: "Moderate", active: "Active" };
+  const DIET_OPTS = ["halal", "veg", "vegan", "no-pork", "no-alcohol", "gluten-free"];
+  const DIET_LABEL = { halal: "Halal", veg: "Vegetarian", vegan: "Vegan", "no-pork": "No pork", "no-alcohol": "No alcohol", "gluten-free": "Gluten-free" };
+  // derive a Date for day index from profile.startDate (ISO yyyy-mm-dd), local-time, DST-safe
+  function dayDate(idx) {
+    const sd = profile && profile.startDate; if (!sd) return null;
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(sd); if (!m) return null;
+    const d = new Date(+m[1], +m[2] - 1, +m[3]); if (isNaN(d)) return null;
+    d.setDate(d.getDate() + idx); return d;
+  }
+  let _dateFmt = null;
+  function fmtDayDate(d) {
+    if (!d) return "";
+    try { if (!_dateFmt) _dateFmt = new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short" }); return _dateFmt.format(d); }
+    catch (_) { return ""; }
+  }
+  const dateKey = (d) => d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : "";
+  function fmtDuration(min) {
+    min = Math.round(min); if (!(min > 0)) return "";
+    const h = Math.floor(min / 60), m = min % 60;
+    return h ? (m ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+  }
+  const mapsSearchUrl = (name) => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(name || "");
+
+  // ---------- money (integer minor units = whole IDR) ----------
+  function moneyRp(n) {
+    n = Math.round(+n || 0);
+    if (n >= 1000000) { const m = n / 1000000; return "Rp " + (m >= 10 ? Math.round(m) : m.toFixed(1).replace(/\.0$/, "")) + "M"; }
+    if (n >= 1000) { const k = n / 1000; return "Rp " + (k >= 100 ? Math.round(k) : k.toFixed(k >= 10 ? 0 : 1).replace(/\.0$/, "")) + "k"; }
+    return "Rp " + n;
+  }
+  // actual cost (in whole IDR) backing a stop's linked expense/receipt, if any (authed only)
+  function actualCost(stop) {
+    if (!stop.linkedExpenseId || !fullDoc) return null;
+    const e = (fullDoc.expenses || []).find((x) => x.id === stop.linkedExpenseId);
+    if (e) return Math.round(+e.amount || 0);
+    const r = (fullDoc.receipts || []).find((x) => x.id === stop.linkedExpenseId);
+    if (r) return Math.round(+r.grandTotal || 0);
+    return null;
+  }
+
+  // ---------- time helpers ----------
+  // parse a manual time string ("8:30", "08:30", "8.30", "8h30", "20:00") → minutes since midnight, or null
+  function parseTimeMin(s) {
+    if (!s) return null;
+    const m = String(s).match(/(\d{1,2})\s*[:.h]\s*(\d{2})/) || String(s).match(/^\s*(\d{1,2})\s*$/);
+    if (!m) return null;
+    let h = +m[1], min = m[2] != null ? +m[2] : 0;
+    if (!(h >= 0 && h < 24) || !(min >= 0 && min < 60)) return null;
+    return h * 60 + min;
+  }
+  const fmtClock = (mins) => { mins = ((Math.round(mins) % 1440) + 1440) % 1440; return String(Math.floor(mins / 60)).padStart(2, "0") + ":" + String(mins % 60).padStart(2, "0"); };
+  // OSRM leg duration (minutes) between two pinned stops for a mode; haversine fallback for walk; null otherwise
+  function legMinutes(a, b, m) {
+    const info = MODES[m] || MODES.car;
+    if (info.road) { const leg = routeCache[legSig(a, b, m)]; return (leg && leg.line) ? leg.dur / 60 : null; }
+    const km = haversineKm([a.lat, a.lng], [b.lat, b.lng]);
+    if (m === "walk") return Math.max(1, km / 5 * 60);
+    return null;   // flight/boat: don't guess travel time
+  }
+  // build a per-day timeline: returns { rows:[{arrival, leaveBy?, late}], endsAt, driveMin } | null
+  function computeDayTimeline(day) {
+    const stops = day.stops || []; if (!stops.length) return null;
+    const rows = stops.map(() => ({ arrival: null, leaveBy: null, late: false }));
+    // anchor: first manual time, else 08:00
+    let clock = null;
+    for (const s of stops) { const t = parseTimeMin(s.time); if (t != null) { clock = t; break; } }
+    if (clock == null) clock = 8 * 60;
+    let driveMin = 0, prevPin = -1;
+    for (let i = 0; i < stops.length; i++) {
+      const s = stops[i], fixed = parseTimeMin(s.time);
+      let travel = 0;
+      if (hasPin(s) && prevPin >= 0) { const lm = legMinutes(stops[prevPin], s, modeOf(s)); if (lm != null) { travel = lm; driveMin += lm; } }
+      const computedArr = (i === 0) ? clock : clock + travel;
+      if (fixed != null) {
+        rows[i].arrival = fixed;
+        if (i > 0) { rows[i].late = computedArr > fixed + 1; rows[i].leaveBy = fixed - travel; }   // back-solve: leave prior stop by …
+        clock = fixed;
+      } else {
+        rows[i].arrival = computedArr; clock = computedArr;
+      }
+      const dur = (s.durationMin > 0) ? s.durationMin : 0;
+      clock += dur;
+      if (hasPin(s)) prevPin = i;
+    }
+    return { rows, endsAt: clock, driveMin };
+  }
+
   // ---------- API ----------
   async function api(path, opts = {}) {
     const headers = {};
@@ -89,6 +181,57 @@
   const routeLayer = L.layerGroup().addTo(map);   // road-following day routes (vectors sit below markers)
   const routeCache = {};                          // daySig -> [[lat,lng]...] (road) | null (failed) | "pending"
   let markers = [], flat = [], activeIdx = -1;
+
+  // ---------- weather (open-meteo, keyless) ----------
+  const wxCache = {};   // "lat,lng,date" -> {tmax,tmin,pop,code,sunrise,sunset} | null (failed) | "pending"
+  const WX_EMOJI = (c) => {
+    if (c === 0) return "☀️"; if (c <= 2) return "🌤"; if (c === 3) return "☁️";
+    if (c <= 48) return "🌫"; if (c <= 57) return "🌦"; if (c <= 67) return "🌧";
+    if (c <= 77) return "🌨"; if (c <= 82) return "🌦"; if (c <= 86) return "🌨";
+    return "⛈";
+  };
+  function dayCentroid(day) {
+    const pins = (day.stops || []).filter(hasPin); if (!pins.length) return null;
+    let la = 0, ln = 0; pins.forEach((s) => { la += s.lat; ln += s.lng; });
+    return { lat: la / pins.length, lng: ln / pins.length };
+  }
+  function wxKey(c, date) { return `${c.lat.toFixed(2)},${c.lng.toFixed(2)},${date}`; }
+  async function fetchWeather(key, lat, lng, date) {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lng.toFixed(3)}` +
+      `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&timezone=auto&start_date=${date}&end_date=${date}`;
+    try {
+      const res = await fetch(url); if (!res.ok) throw 0;
+      const j = await res.json(); const d = j && j.daily;
+      if (!d || !d.time || !d.time.length) throw 0;
+      wxCache[key] = { code: d.weather_code[0], tmax: d.temperature_2m_max[0], tmin: d.temperature_2m_min[0],
+        pop: d.precipitation_probability_max ? d.precipitation_probability_max[0] : null,
+        sunrise: (d.sunrise && d.sunrise[0]) || "", sunset: (d.sunset && d.sunset[0]) || "" };
+    } catch (_) { wxCache[key] = null; }
+  }
+  // ensure forecasts for the visible day(s) that have a real date within ~16 days + pinned stops
+  function ensureWeather() {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    let queued = false;
+    viewDays().forEach((di) => {
+      const day = days()[di], d = dayDate(di); if (!d) return;
+      const diff = Math.round((d - today) / 86400000); if (diff < 0 || diff > 15) return;
+      const c = dayCentroid(day); if (!c) return;
+      const date = dateKey(d), key = wxKey(c, date);
+      if (wxCache[key] === undefined) { wxCache[key] = "pending"; queued = true; fetchWeather(key, c.lat, c.lng, date).then(() => renderSheet()); }
+    });
+    return queued;
+  }
+  function weatherChipHtml(di) {
+    const day = days()[di], d = dayDate(di); if (!d) return "";
+    const c = dayCentroid(day); if (!c) return "";
+    const w = wxCache[wxKey(c, dateKey(d))];
+    if (!w || w === "pending") return "";
+    const sun = (iso) => { const m = /T(\d{2}:\d{2})/.exec(iso || ""); return m ? m[1] : ""; };
+    const pop = (w.pop != null && w.pop > 0) ? ` · 🌧${Math.round(w.pop)}%` : "";
+    const rise = sun(w.sunrise), set = sun(w.sunset);
+    const sunTxt = (rise && set) ? `<span class="wx-sun">🌅 ${rise} · 🌇 ${set}</span>` : "";
+    return `<span class="day-chip wx-chip">${WX_EMOJI(w.code)} ${Math.round(w.tmax)}°/${Math.round(w.tmin)}°${pop}</span>${sunTxt}`;
+  }
 
   const viewDays = () => currentDay === "all" ? days().map((_, i) => i) : (days()[currentDay] ? [currentDay] : []);
   function buildFlat() {
@@ -225,14 +368,29 @@
     }
     return `<a class="cost-chip" href="/split/?t=${encodeURIComponent(tripId)}" title="has a linked cost">💸 cost</a>`;
   }
-  function stopCard(di, si, gi) {
+  function stopCard(di, si, gi, tl) {
     const day = days()[di], stop = day.stops[si], t = typeOf(stop.type);
     const time = stop.time ? `<span class="stop-time">${esc(stop.time)}</span>` : "";
-    const url = stop.url ? `<a class="stop-link" href="${esc(stop.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Maps ↗</a>` : "";
+    // computed timeline row: arrival + visit duration line, optional "leave prev by" badge + late warning
+    const row = tl && tl.rows[si];
+    let timeline = "";
+    if (row && row.arrival != null) {
+      const dur = (stop.durationMin > 0) ? ` · ${fmtDuration(stop.durationMin)} here` : "";
+      const fixed = parseTimeMin(stop.time) != null;
+      timeline = `<div class="stop-clock${row.late ? " late" : ""}">${fixed ? "🕒" : "arr"} ${fmtClock(row.arrival)}${dur}${row.late ? ' <span class="late-tag">⚠ tight</span>' : ""}</div>`;
+    }
+    const leaveBy = (row && row.leaveBy != null && si > 0)
+      ? `<span class="leave-by" title="leave the previous stop by this time">leave by ${fmtClock(row.leaveBy)}</span>` : "";
+    const lk = stop.links || {};
+    const mapsHref = lk.maps || stop.url || "";
+    const chip = (href, label) => href ? `<a class="stop-chip" href="${esc(href)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${label}</a>` : "";
+    const linksRow = [chip(mapsHref, "🗺 Maps"), chip(lk.booking, "🏨 Book"), chip(lk.tickets, "🎟 Tickets")].filter(Boolean).join("");
+    const links = linksRow ? `<div class="stop-links">${linksRow}</div>` : "";
+    const dur = (stop.durationMin > 0) ? `<span class="dur-pill" title="visit duration">⏱ ${fmtDuration(stop.durationMin)}</span>` : "";
     const nopin = hasPin(stop) ? "" : `<span class="nopin" title="no map pin yet">no pin</span>`;
     let prevPin = -1;
     if (hasPin(stop)) for (let j = si - 1; j >= 0; j--) { if (hasPin(day.stops[j])) { prevPin = j; break; } }
-    const legPill = prevPin >= 0 ? `<div class="leg-pill" data-di="${di}" data-a="${prevPin}" data-b="${si}">${esc(legLabel(day.stops[prevPin], stop))}</div>` : "";
+    const legPill = (prevPin >= 0 || leaveBy) ? `<div class="leg-row">${prevPin >= 0 ? `<span class="leg-pill" data-di="${di}" data-a="${prevPin}" data-b="${si}">${esc(legLabel(day.stops[prevPin], stop))}</span>` : ""}${leaveBy}</div>` : "";
     const edit = editing ? `
       <div class="stop-edit">
         <button class="se mv" data-act="up" data-di="${di}" data-si="${si}" title="Move up" aria-label="Move up">▲</button>
@@ -241,36 +399,103 @@
         <button class="se" data-act="edit" data-di="${di}" data-si="${si}" title="Edit">✎</button>
       </div>` : "";
     return `
-      <li class="tl-item anim ${stop.done ? "is-done" : ""}" data-gi="${gi}" style="animation-delay:${Math.min(0.6, 0.05 * gi + 0.08)}s">
+      <li class="tl-item anim ${stop.done ? "is-done" : ""}" data-gi="${gi}" data-di="${di}" data-si="${si}" style="animation-delay:${Math.min(0.6, 0.05 * gi + 0.08)}s">
         <div class="tl-node ${LOGI.has(stop.type) ? "is-logi" : ""}" ${authed ? `data-sid="1" data-act="done" data-di="${di}" data-si="${si}" role="button" tabindex="0" aria-label="${stop.done ? "Mark not done" : "Mark done"}"` : ""}><span class="nd-badge">${badgeFor(day, stop, si)}</span><span class="nd-check">✓</span></div>
         <button class="stop" data-idx="${gi}">
           <div class="thumb" style="--thumb:linear-gradient(150deg, ${t.g[0]}, ${t.g[1]})"><span>${t.icon}</span></div>
           <div class="stop-body">
             ${legPill}
             <div class="stop-top"><span class="stop-name">${esc(stop.name)}</span>${time}</div>
-            <div class="stop-sub"><span class="type">${esc(t.label)}</span>${nopin}${costChip(stop)}</div>
+            <div class="stop-sub"><span class="type">${esc(t.label)}</span>${dur}${nopin}${costChip(stop)}</div>
+            ${timeline}
             ${stop.note ? `<p class="stop-note">${esc(stop.note)}</p>` : ""}
-            ${url}
+            ${links}
           </div>
         </button>
         ${edit}
       </li>`;
   }
-  function dayHead(di) {
+  function dayHead(di, tl) {
     const day = days()[di], dir = dirUrl(day);
+    const dateText = day.dateLabel || fmtDayDate(dayDate(di));   // manual dateLabel wins; else derive from startDate
     const addDay = editing ? `<button class="eb-btn sm" data-act="editday" data-di="${di}">✎ day</button>
       <button class="eb-btn sm" data-act="dayup" data-di="${di}" title="Move day earlier">▲</button>
       <button class="eb-btn sm" data-act="daydown" data-di="${di}" title="Move day later">▼</button>` : "";
+    // schedule chip: ends ~HH:MM · {driving total}
+    let schedChip = "";
+    if (tl && tl.endsAt != null) {
+      const drive = tl.driveMin > 0 ? ` · 🚗 ${fmtDuration(tl.driveMin)}` : "";
+      schedChip = `<span class="day-chip">ends ~${fmtClock(tl.endsAt)}${drive}</span>`;
+    }
+    const wxChip = weatherChipHtml(di);
+    const budget = budgetGaugeHtml(di);
+    const shareDay = `<button class="eb-btn sm" data-act="shareday" data-di="${di}" title="Share this day">↗ Share</button>`;
+    const chips = (schedChip || wxChip) ? `<div class="day-chips">${schedChip}${wxChip}</div>` : "";
     return `
       <div class="day-head">
-        <span class="day-eyebrow">${esc(day.label || "Day " + (di + 1))}${day.dateLabel ? `<span class="pill">· ${esc(day.dateLabel)}</span>` : ""}</span>
+        <span class="day-eyebrow">${esc(day.label || "Day " + (di + 1))}${dateText ? `<span class="pill">· ${esc(dateText)}</span>` : ""}</span>
         <h2 class="day-title">${esc(day.title || "Day " + (di + 1))}</h2>
+        ${chips}
+        ${budget}
         <div class="day-actions">
           ${dir ? `<a class="route-btn" href="${dir}" target="_blank" rel="noopener">Open route ↗</a>` : ""}
+          ${shareDay}
           ${addDay}
         </div>
       </div>`;
   }
+  // budget gauge — AUTHED users only (never expose amounts to public)
+  function budgetGaugeHtml(di) {
+    if (!authed) return "";
+    const day = days()[di], stops = day.stops || [];
+    let planned = 0, actual = 0, hasActual = false;
+    stops.forEach((s) => { if (s.cost > 0) planned += s.cost; const a = actualCost(s); if (a != null) { actual += a; hasActual = true; if (!(s.cost > 0)) planned += a; } });
+    const target = (profile && profile.dailyTarget > 0) ? profile.dailyTarget : 0;
+    if (!planned && !hasActual && !target) return "";
+    const over = target && planned > target;
+    const pct = target ? Math.min(100, Math.round(planned / target * 100)) : (planned ? 100 : 0);
+    const targetTxt = target ? ` / ${moneyRp(target)} planned` : " planned";
+    const actualTxt = hasActual ? `<span class="bg-actual">actual ${moneyRp(actual)}</span>` : "";
+    return `<div class="budget-gauge${over ? " over" : ""}">
+      <div class="bg-bar"><span style="width:${pct}%"></span></div>
+      <div class="bg-label"><span class="bg-planned">${moneyRp(planned)}${targetTxt}</span>${actualTxt}</div>
+    </div>`;
+  }
+  // dates summary text e.g. "Sat 13 Jun – Mon 15 Jun"
+  function datesSummary() {
+    const n = days().length, s = dayDate(0); if (!s || !n) return "";
+    const e = dayDate(n - 1);
+    return n > 1 ? `${fmtDayDate(s)} – ${fmtDayDate(e)}` : fmtDayDate(s);
+  }
+  // authed/editing compact summary chips (may show money-ish budget level, never the daily target text)
+  function profileSummaryHtml() {
+    if (!profile) return "";
+    const chips = [];
+    const dates = datesSummary(); if (dates) chips.push(`<span class="ps-chip">🗓 <b>${esc(dates)}</b></span>`);
+    if (profile.pace && PACE_LABEL[profile.pace]) chips.push(`<span class="ps-chip">⚡ ${esc(PACE_LABEL[profile.pace])}</span>`);
+    if (profile.budgetLevel && BUDGET_LABEL[profile.budgetLevel]) chips.push(`<span class="ps-chip">💰 ${esc(BUDGET_LABEL[profile.budgetLevel])}</span>`);
+    (profile.dietary || []).forEach((d) => chips.push(`<span class="ps-chip">🍽 ${esc(DIET_LABEL[d] || d)}</span>`));
+    const grp = groupSummary(); if (grp) chips.push(`<span class="ps-chip">👥 ${esc(grp)}</span>`);
+    return chips.length ? `<div class="profile-summary">${chips.join("")}</div>` : "";
+  }
+  function groupSummary() {
+    const a = +profile.adults || 0, k = +profile.kids || 0; if (!a && !k) return "";
+    const p = []; if (a) p.push(`${a} adult${a > 1 ? "s" : ""}`); if (k) p.push(`${k} kid${k > 1 ? "s" : ""}`);
+    return p.join(" · ");
+  }
+  // public, non-money "good to know" strip
+  function goodToKnowHtml() {
+    if (authed || !profile) return "";
+    const bits = [];
+    if ((profile.dietary || []).includes("halal")) bits.push("Halal-friendly");
+    else if ((profile.dietary || []).length) bits.push((profile.dietary || []).map((d) => DIET_LABEL[d] || d).join(", "));
+    if (profile.pace && PACE_LABEL[profile.pace]) bits.push(PACE_LABEL[profile.pace] + " pace");
+    if (profile.mobility && MOBILITY_LABEL[profile.mobility]) bits.push(MOBILITY_LABEL[profile.mobility]);
+    if ((+profile.kids || 0) > 0) bits.push("Family");
+    if (!bits.length) return "";
+    return `<div class="good-to-know"><span class="gtk-label">Good to know</span>${bits.map((b) => `<span class="gtk-chip">${esc(b)}</span>`).join("")}</div>`;
+  }
+
   function renderSheet() {
     const inner = $("#sheet-inner");
     if (!days().length) {
@@ -278,6 +503,7 @@
         <div class="empty-emoji">🗺️</div>
         <h2>No itinerary yet</h2>
         <p>${authed ? "Add the first day, or generate one with AI." : "Ask the organizer to add a plan."}</p>
+        ${authed ? profileSummaryHtml() : goodToKnowHtml()}
         <div class="empty-cta">
           ${admin && aiEnabled ? `<button class="solid-btn" id="emptyAi">✨ Generate with AI</button>` : ""}
           <button class="eb-btn" id="emptyAdd">＋ Add the first day</button>
@@ -287,13 +513,15 @@
       const eai = $("#emptyAi"); if (eai) eai.addEventListener("click", () => $("#aiBtn").click());
       return;
     }
-    let gi = 0; let html = "";
+    let gi = 0; let html = nowStripHtml() + (authed ? profileSummaryHtml() : goodToKnowHtml());
     const list = currentDay === "all" ? days().map((_, i) => i) : [currentDay];
     list.forEach((di) => {
-      const cards = days()[di].stops.map((_, si) => stopCard(di, si, gi++)).join("");
-      html += `<section class="day-group">${dayHead(di)}<ol class="timeline">${cards}</ol>
+      const tl = computeDayTimeline(days()[di]);
+      const cards = days()[di].stops.map((_, si) => stopCard(di, si, gi++, tl)).join("");
+      html += `<section class="day-group">${dayHead(di, tl)}<ol class="timeline">${cards}</ol>
         ${editing ? `<button class="eb-btn add-stop" data-act="addstop" data-di="${di}">＋ Add stop</button>` : ""}</section>`;
     });
+    if (authed) html += tripBudgetHtml();
     if (editing) html += `<button class="eb-btn add-day" data-act="addday">＋ Add day</button>`;
     inner.innerHTML = html;
 
@@ -301,6 +529,97 @@
     inner.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", (e) => {
       e.stopPropagation(); onEditAct(b.dataset.act, Number(b.dataset.di), Number(b.dataset.si));
     }));
+    ensureWeather();
+    applyNowNext();
+  }
+  // trip-total budget (authed) — sum vs dailyTarget × days
+  function tripBudgetHtml() {
+    if (!authed) return "";
+    let planned = 0, actual = 0, hasActual = false;
+    days().forEach((day) => (day.stops || []).forEach((s) => {
+      if (s.cost > 0) planned += s.cost; const a = actualCost(s);
+      if (a != null) { actual += a; hasActual = true; if (!(s.cost > 0)) planned += a; }
+    }));
+    const target = (profile && profile.dailyTarget > 0) ? profile.dailyTarget * days().length : 0;
+    if (!planned && !hasActual && !target) return "";
+    const over = target && planned > target;
+    const pct = target ? Math.min(100, Math.round(planned / target * 100)) : (planned ? 100 : 0);
+    const targetTxt = target ? ` / ${moneyRp(target)} planned` : " planned";
+    const actualTxt = hasActual ? `<span class="bg-actual">actual ${moneyRp(actual)}</span>` : "";
+    return `<div class="trip-budget"><span class="tb-label">Trip budget</span>
+      <div class="budget-gauge${over ? " over" : ""}">
+        <div class="bg-bar"><span style="width:${pct}%"></span></div>
+        <div class="bg-label"><span class="bg-planned">${moneyRp(planned)}${targetTxt}</span>${actualTxt}</div>
+      </div></div>`;
+  }
+
+  // ---------- NOW / NEXT ----------
+  // which day index is "today" within the trip, or -1
+  function todayDayIndex() {
+    const n = days().length; if (!n || !(profile && profile.startDate)) return -1;
+    const tk = dateKey(new Date());
+    for (let i = 0; i < n; i++) if (dateKey(dayDate(i)) === tk) return i;
+    return -1;
+  }
+  // find the current + next stop on today's day from computed arrival times
+  function nowNext() {
+    const di = todayDayIndex(); if (di < 0) return null;
+    const day = days()[di], tl = computeDayTimeline(day); if (!tl) return null;
+    const now = new Date(); const mins = now.getHours() * 60 + now.getMinutes();
+    let cur = -1, next = -1;
+    for (let i = 0; i < day.stops.length; i++) {
+      const arr = tl.rows[i] && tl.rows[i].arrival; if (arr == null) continue;
+      if (arr <= mins) cur = i; else { next = i; break; }
+    }
+    // refine "current" — within its visit duration window it's current; once past, it's the last reached
+    return { di, cur, next, tl, mins };
+  }
+  function nowStripHtml() {
+    const nn = nowNext(); if (!nn || (nn.cur < 0 && nn.next < 0)) return "";
+    const day = days()[nn.di];
+    const curS = nn.cur >= 0 ? day.stops[nn.cur] : null;
+    const nextS = nn.next >= 0 ? day.stops[nn.next] : null;
+    let main, sub = "";
+    if (curS) {
+      main = `<span class="ns-kicker">Now</span><span class="ns-name">${esc(curS.name)}</span>`;
+      if (nextS) { const inMin = Math.max(0, Math.round((nn.tl.rows[nn.next].arrival) - nn.mins)); sub = `<span class="ns-next">next: ${esc(nextS.name)} · in ${fmtDuration(inMin) || "now"}</span>`; }
+    } else if (nextS) {
+      const inMin = Math.max(0, Math.round((nn.tl.rows[nn.next].arrival) - nn.mins));
+      main = `<span class="ns-kicker">Up next</span><span class="ns-name">${esc(nextS.name)}</span>`;
+      sub = `<span class="ns-next">in ${fmtDuration(inMin) || "now"}</span>`;
+    } else return "";
+    return `<div class="now-strip" data-di="${nn.di}" data-cur="${nn.cur}" data-next="${nn.next}"><div class="ns-main">${main}</div>${sub}</div>`;
+  }
+  // tag the matching card + pin with .is-now / .is-next (only meaningful in single-day or all view)
+  function applyNowNext() {
+    document.querySelectorAll(".is-now, .is-next").forEach((el) => el.classList.remove("is-now", "is-next"));
+    markers.forEach((m) => { const el = m && m.getElement(); if (el) el.classList.remove("is-now", "is-next"); });
+    const nn = nowNext(); if (!nn) return;
+    const tag = (si, cls) => {
+      if (si < 0) return;
+      const li = document.querySelector(`.tl-item[data-di="${nn.di}"][data-si="${si}"]`);
+      if (li) { li.classList.add(cls); const gi = +li.dataset.gi; const mk = markers[gi] && markers[gi].getElement(); if (mk) mk.classList.add(cls); }
+    };
+    tag(nn.cur, "is-now"); tag(nn.next, "is-next");
+  }
+  // on boot mid-trip, scroll to the current (or next) stop
+  function scrollToNow() {
+    const nn = nowNext(); if (!nn) return;
+    const si = nn.cur >= 0 ? nn.cur : nn.next; if (si < 0) return;
+    const li = document.querySelector(`.tl-item[data-di="${nn.di}"][data-si="${si}"]`);
+    if (li) li.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  let nowTimer = null;
+  function startNowTicker() {
+    if (nowTimer) clearInterval(nowTimer);
+    nowTimer = setInterval(() => {
+      if (document.hidden) return;
+      if (todayDayIndex() < 0) return;
+      const strip = $(".now-strip");
+      if (strip) { const fresh = nowStripHtml(); if (fresh) { const tmp = document.createElement("div"); tmp.innerHTML = fresh; strip.replaceWith(tmp.firstElementChild); } }
+      else { const html = nowStripHtml(); if (html) { const inner = $("#sheet-inner"); if (inner) inner.insertAdjacentHTML("afterbegin", html); } }
+      applyNowNext();
+    }, 60000);
   }
 
   function activateStop(i, source) {
@@ -358,6 +677,7 @@
     $("#editToggle").textContent = editing ? "Done" : "Edit";
     $("#editToggle").setAttribute("aria-pressed", editing ? "true" : "false");
     document.querySelectorAll(".admin-only").forEach((el) => { el.hidden = !admin; });
+    $("#profileBtn").hidden = !(authed && editing);
     $("#aiBtn").hidden = !(admin && aiEnabled);
     $("#logoutBtn").hidden = !admin;
   }
@@ -378,6 +698,7 @@
     if (act === "addday") return openDay(null);
     if (act === "editday") return openDay(di);
     if (act === "cost") return openCost(di, si);
+    if (act === "shareday") return shareTrip(di);
   }
   function moveStop(di, si, d) { const a = days()[di].stops; const j = si + d; if (j < 0 || j >= a.length) return; [a[si], a[j]] = [a[j], a[si]]; renderSheet(); renderMap(); saveItin(); }
   function toggleDone(di, si) {
@@ -408,16 +729,20 @@
     return { lat, lng };
   }
   function captureStop() {
+    const lk = { maps: $("#stUrl").value.trim(), booking: $("#stLinkBooking").value.trim(), tickets: $("#stLinkTickets").value.trim() };
     return { name: $("#stName").value, type: $("#stType").value, mode: $("#stMode").value, time: $("#stTime").value,
-      url: $("#stUrl").value, note: $("#stNote").value,
+      url: $("#stUrl").value, links: lk, durationMin: Math.max(0, parseInt($("#stDuration").value, 10) || 0), note: $("#stNote").value,
       lat: parseFloat($("#stLat").value) || 0, lng: parseFloat($("#stLng").value) || 0 };
   }
   function openStop(di, si, prefill) {
     stopEdit = { di, si };
     const s = prefill || (si != null ? days()[di].stops[si] : {});
+    const lk = s.links || {};
     $("#stopTitle").textContent = si != null ? "Edit stop" : "Add stop";
     $("#stName").value = s.name || ""; $("#stType").value = s.type || "activity"; $("#stMode").value = s.mode || "car";
-    $("#stTime").value = s.time || ""; $("#stUrl").value = s.url || "";
+    $("#stTime").value = s.time || ""; $("#stUrl").value = lk.maps || s.url || "";
+    $("#stLinkBooking").value = lk.booking || ""; $("#stLinkTickets").value = lk.tickets || "";
+    $("#stDuration").value = (s.durationMin > 0) ? s.durationMin : "";
     $("#stNote").value = s.note || ""; $("#stPlace").value = "";
     setCoords((Number.isFinite(s.lat) && (s.lat !== 0 || s.lng !== 0)) ? { lat: s.lat, lng: s.lng } : null);
     $("#stErr").hidden = true; $("#stDelete").hidden = si == null;
@@ -447,10 +772,13 @@
     const name = $("#stName").value.trim();
     if (!name) { $("#stErr").textContent = "Name is required"; $("#stErr").hidden = false; $("#stName").focus(); return; }
     const lat = parseFloat($("#stLat").value), lng = parseFloat($("#stLng").value);
-    const s = { name, type: $("#stType").value, mode: $("#stMode").value, time: $("#stTime").value.trim(), url: $("#stUrl").value.trim(),
+    const mapsUrl = $("#stUrl").value.trim();
+    const links = { maps: mapsUrl, booking: $("#stLinkBooking").value.trim(), tickets: $("#stLinkTickets").value.trim() };
+    const s = { name, type: $("#stType").value, mode: $("#stMode").value, time: $("#stTime").value.trim(), url: mapsUrl,
+      links, durationMin: Math.max(0, parseInt($("#stDuration").value, 10) || 0),
       note: $("#stNote").value.trim(), lat: Number.isFinite(lat) ? lat : 0, lng: Number.isFinite(lng) ? lng : 0 };
     const { di, si } = stopEdit;
-    if (si != null) { const o = days()[di].stops[si]; s.id = o.id; s.linkedExpenseId = o.linkedExpenseId; s.done = o.done; s.durationMin = o.durationMin; s.cost = o.cost; s.links = o.links; days()[di].stops[si] = s; }
+    if (si != null) { const o = days()[di].stops[si]; s.id = o.id; s.linkedExpenseId = o.linkedExpenseId; s.done = o.done; s.cost = o.cost; days()[di].stops[si] = s; }
     else days()[di].stops.push(s);
     stopDlg.close(); renderSheet(); renderMap(); saveItin("Saved");
   });
@@ -482,6 +810,80 @@
     else { d.stops = []; itin.days.push(d); currentDay = itin.days.length - 1; }
     dayDlg.close(); renderAll(); saveItin("Saved");
   });
+
+  // trip profile dialog
+  const profileDlg = $("#profileDialog");
+  // build dietary chips from the vocab
+  $("#pfDietary").innerHTML = DIET_OPTS.map((k) => `<button type="button" class="chip" data-diet="${k}">${esc(DIET_LABEL[k] || k)}</button>`).join("");
+  $("#pfDietary").addEventListener("click", (e) => { const b = e.target.closest(".chip"); if (b) b.classList.toggle("on"); });
+  function openProfile() {
+    requireAuth(async () => {
+      // make sure we have the FULL profile (incl. dailyTarget/homeCurrency) before editing
+      if (!fullDoc) { try { fullDoc = await api(`/trips/${tripId}`); } catch (_) {} }
+      const p = (fullDoc && fullDoc.profile) || profile || {};
+      $("#pfStartDate").value = p.startDate || "";
+      $("#pfPace").value = p.pace || ""; $("#pfBudgetLevel").value = p.budgetLevel || "";
+      $("#pfDailyTarget").value = p.dailyTarget > 0 ? p.dailyTarget : "";
+      $("#pfInterests").value = (p.interests || []).join(", ");
+      const diet = new Set(p.dietary || []);
+      $("#pfDietary").querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", diet.has(c.dataset.diet)));
+      $("#pfAdults").value = p.adults > 0 ? p.adults : ""; $("#pfKids").value = p.kids > 0 ? p.kids : "";
+      $("#pfMobility").value = p.mobility || ""; $("#pfHomeCurrency").value = p.homeCurrency || "";
+      $("#pfErr").hidden = true;
+      profileDlg.showModal(); setTimeout(() => $("#pfStartDate").focus(), 30);
+    });
+  }
+  $("#profileBtn").addEventListener("click", openProfile);
+  $("#pfCancel").addEventListener("click", () => profileDlg.close());
+  profileDlg.addEventListener("cancel", (e) => { e.preventDefault(); profileDlg.close(); });
+  $("#profileForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const interests = $("#pfInterests").value.split(",").map((s) => s.trim()).filter(Boolean);
+    const dietary = [...$("#pfDietary").querySelectorAll(".chip.on")].map((c) => c.dataset.diet);
+    const body = {
+      startDate: $("#pfStartDate").value || "",
+      pace: $("#pfPace").value || "", budgetLevel: $("#pfBudgetLevel").value || "",
+      dailyTarget: Math.max(0, parseInt($("#pfDailyTarget").value, 10) || 0),
+      interests, dietary,
+      adults: Math.max(0, parseInt($("#pfAdults").value, 10) || 0),
+      kids: Math.max(0, parseInt($("#pfKids").value, 10) || 0),
+      mobility: $("#pfMobility").value || "", homeCurrency: $("#pfHomeCurrency").value.trim(),
+    };
+    const go = $("#pfSave"); go.disabled = true;
+    try {
+      fullDoc = await api(`/trips/${tripId}/profile`, { method: "PUT", body });
+      profileDlg.close(); _dateFmt = null; await reload(true); toast("Trip profile saved");
+    } catch (err) {
+      $("#pfErr").textContent = err.code === 401 ? "Enter the passcode to edit" : "Save failed"; $("#pfErr").hidden = false;
+      if (err.code === 401) { authed = false; profileDlg.close(); showLock(); }
+    } finally { go.disabled = false; }
+  });
+
+  // ---------- share ----------
+  function shareTrip(di) {
+    const name = (data && data.trip && data.trip.name) || itin.title || "Our trip";
+    const n = days().length;
+    let url = location.origin + location.pathname + location.search;
+    let text = name;
+    const dates = datesSummary();
+    if (di != null && days()[di]) {
+      const d = days()[di];
+      url += "#day" + (di + 1);
+      text = `${name} — ${d.title || d.label || "Day " + (di + 1)}`;
+    } else {
+      const parts = [];
+      if (n) parts.push(`${n} day${n > 1 ? "s" : ""}`);
+      if (dates) parts.push(dates);
+      if (parts.length) text += " · " + parts.join(" · ");
+    }
+    const payload = { title: name, text, url };
+    if (navigator.share) { navigator.share(payload).catch(() => {}); return; }
+    const copy = `${text}\n${url}`;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(copy).then(() => toast("Link copied"), () => toast("Couldn't copy", "err"));
+    } else { toast(copy); }
+  }
+  $("#shareBtn").addEventListener("click", () => shareTrip(null));
 
   // edit toggle + login
   $("#editToggle").addEventListener("click", () => { if (!editing) return requireAuth(() => { editing = true; renderAll(); }); editing = false; renderAll(); });
@@ -525,7 +927,17 @@
 
   // ---------- AI generate ----------
   const aiDlg = $("#aiDialog");
-  $("#aiBtn").addEventListener("click", () => { $("#aiDest").value = data && data.trip ? data.trip.name : ""; $("#aiDays").value = 3; $("#aiNotes").value = ""; $("#aiErr").hidden = true; aiDlg.showModal(); setTimeout(() => $("#aiDest").focus(), 30); });
+  function hasProfileSignal() {
+    const p = (fullDoc && fullDoc.profile) || profile; if (!p) return false;
+    return !!(p.pace || p.budgetLevel || (p.interests || []).length || (p.dietary || []).length || p.mobility || p.startDate || p.adults || p.kids);
+  }
+  $("#aiBtn").addEventListener("click", () => {
+    $("#aiDest").value = data && data.trip ? data.trip.name : ""; $("#aiDays").value = 3;
+    const p = (fullDoc && fullDoc.profile) || profile;
+    $("#aiNotes").value = (p && (p.interests || []).length) ? (p.interests || []).join(", ") : "";
+    $("#aiProfileHint").hidden = !hasProfileSignal();
+    $("#aiErr").hidden = true; aiDlg.showModal(); setTimeout(() => $("#aiDest").focus(), 30);
+  });
   $("#aiCancel").addEventListener("click", () => aiDlg.close());
   aiDlg.addEventListener("cancel", (e) => { e.preventDefault(); aiDlg.close(); });
   $("#aiForm").addEventListener("submit", async (e) => {
@@ -572,9 +984,10 @@
     try {
       fullDoc = await api(`/trips/${tripId}`);   // verifies passcode
       localStorage.setItem(PASS_KEY, pass); authed = true;
+      if (fullDoc && fullDoc.profile) profile = fullDoc.profile;   // promote to full profile (incl dailyTarget)
       try { const me = await api("/me"); admin = !!me.admin; aiEnabled = !!me.aiEnabled; } catch (_) {}
       $("#lock").hidden = true; $("#lockErr").textContent = "";
-      applyAuthUI();
+      renderSheet(); applyAuthUI();
       const fn = lockIntent; lockIntent = null; if (typeof fn === "function") fn();
     } catch (err) {
       pass = ""; const c = $("#lockForm"); c.classList.remove("shake"); void c.offsetWidth; c.classList.add("shake");
@@ -609,24 +1022,38 @@
   let rT; window.addEventListener("resize", () => { clearTimeout(rT); rT = setTimeout(() => { map.invalidateSize(); if (window.innerWidth < 860) setSheetState(sheet.dataset.state || "peek"); fitView(false); }, 150); });
 
   // ---------- load / poll ----------
-  function adopt(d) { data = d; itin = (d && d.itinerary) || { title: "", days: [] }; lastRev = d ? d.rev : -1; }
+  function adopt(d) {
+    data = d; itin = (d && d.itinerary) || { title: "", days: [] }; lastRev = d ? d.rev : -1;
+    // authed full profile (incl dailyTarget) wins; else the sanitized public subset
+    profile = (authed && fullDoc && fullDoc.profile) || (d && d.profile) || null;
+    _dateFmt = null;
+  }
   async function reload(silent) {
     try { const d = await api(`/trips/${tripId}/itinerary`); adopt(d); if (!silent) {} renderAll(); }
     catch (e) { if (!silent) $("#sheet-inner").innerHTML = `<div class="empty-itin"><p>Couldn't load this trip.</p></div>`; }
   }
   function startDayFromHash() { if (/#all/i.test(location.hash)) return "all"; const m = (location.hash || "").match(/day(\d+)/i); return m ? Math.max(0, Number(m[1]) - 1) : 0; }
+  // with no #hash, land on today's day when today is within the trip's date range
+  function defaultDay() {
+    const n = days().length; if (!n || !(profile && profile.startDate)) return 0;
+    const today = dateKey(new Date());
+    for (let i = 0; i < n; i++) if (dateKey(dayDate(i)) === today) return i;
+    return 0;
+  }
 
   async function boot() {
     if (!tripId) { location.replace("/"); return; }
     try {
       const d = await api(`/trips/${tripId}/itinerary`);   // PUBLIC — no passcode needed to view
       adopt(d);
-      currentDay = startDayFromHash();
-      // if we already hold a passcode, silently promote to authed (enables edit + cost chips)
-      if (pass) { try { fullDoc = await api(`/trips/${tripId}`); authed = true; const me = await api("/me"); admin = !!me.admin; aiEnabled = !!me.aiEnabled; } catch (_) { pass = ""; } }
+      // if we already hold a passcode, silently promote to authed (enables edit + cost chips + full profile)
+      if (pass) { try { fullDoc = await api(`/trips/${tripId}`); authed = true; if (fullDoc && fullDoc.profile) profile = fullDoc.profile; const me = await api("/me"); admin = !!me.admin; aiEnabled = !!me.aiEnabled; } catch (_) { pass = ""; } }
+      currentDay = location.hash ? startDayFromHash() : defaultDay();
       renderAll();
       setSheetState("peek");
       setTimeout(() => map.invalidateSize(), 60);
+      startNowTicker();
+      if (!location.hash && todayDayIndex() >= 0) setTimeout(scrollToNow, 600);
     } catch (e) {
       $("#sheet-inner").innerHTML = `<div class="empty-itin"><div class="empty-emoji">🗺️</div><h2>Trip not found</h2><p>Check the link, or go to <a href="/">Tripkit</a>.</p></div>`;
       setSheetState("peek");

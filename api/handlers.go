@@ -374,12 +374,46 @@ func handlePublicItinerary(w http.ResponseWriter, r *http.Request) {
 	for _, p := range d.People {
 		people = append(people, map[string]string{"id": p.ID, "name": p.Name, "color": p.Color})
 	}
-	writeJSON(w, map[string]any{
+	out := map[string]any{
 		"trip":      map[string]string{"id": d.Trip.ID, "name": d.Trip.Name},
 		"people":    people,
 		"itinerary": d.Itinerary,
 		"rev":       d.Rev,
+	}
+	// SANITIZED profile only — never money (no dailyTarget, no homeCurrency).
+	if d.Profile != nil {
+		out["profile"] = map[string]any{
+			"startDate":   d.Profile.StartDate,
+			"pace":        d.Profile.Pace,
+			"budgetLevel": d.Profile.BudgetLevel,
+			"interests":   d.Profile.Interests,
+			"dietary":     d.Profile.Dietary,
+			"adults":      d.Profile.Adults,
+			"kids":        d.Profile.Kids,
+			"mobility":    d.Profile.Mobility,
+		}
+	}
+	writeJSON(w, out)
+}
+
+// handleProfilePut sets the trip's planning profile (editor tier). Body = Profile JSON.
+// Returns the full TripDoc (mirrors handleItineraryPut).
+func handleProfilePut(w http.ResponseWriter, r *http.Request) {
+	id, ok := tripID(r)
+	if !ok {
+		notFound(w)
+		return
+	}
+	var in Profile
+	if err := readJSON(r, &in); err != nil {
+		httpError(w, 400, "bad request")
+		return
+	}
+	d, err := store.mutate(id, func(d *TripDoc) error {
+		d.Profile = &in
+		return nil
 	})
+	respondMutate(w, d, err)
 }
 
 func handleItineraryPut(w http.ResponseWriter, r *http.Request) {

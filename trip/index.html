@@ -22,7 +22,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <link rel="stylesheet" href="/shared/tokens.css?v=1" />
-  <link rel="stylesheet" href="styles.css?v=20260617f" />
+  <link rel="stylesheet" href="styles.css?v=20260617g" />
 </head>
 <body>
   <!-- passcode gate -->
@@ -55,7 +55,9 @@
       <div class="trip-chip" id="trip-chip"></div>
       <nav class="tabs" id="tabs" role="tablist" aria-label="Trip days"></nav>
       <div class="edit-bar" id="edit-bar">
+        <button class="eb-btn" id="shareBtn" type="button" title="Share this trip">↗ Share</button>
         <button class="eb-btn" id="editToggle" type="button" aria-pressed="false">Edit</button>
+        <button class="eb-btn editing-only" id="profileBtn" type="button" hidden>⚙ Trip</button>
         <button class="eb-btn admin-only" id="aiBtn" type="button" hidden>✨ AI</button>
         <button class="eb-btn admin-only" id="logoutBtn" type="button" hidden>Log out</button>
       </div>
@@ -112,7 +114,12 @@
       </div>
       <div class="fld-row">
         <label class="fld"><span>Time</span><input id="stTime" type="text" maxlength="12" placeholder="08:30" /></label>
-        <label class="fld"><span>Maps URL</span><input id="stUrl" type="url" placeholder="https://…" /></label>
+        <label class="fld"><span>Visit (min)</span><input id="stDuration" type="number" min="0" step="5" inputmode="numeric" placeholder="0" /></label>
+      </div>
+      <label class="fld"><span>Maps URL</span><input id="stUrl" type="url" placeholder="https://…" /></label>
+      <div class="fld-row">
+        <label class="fld"><span>Booking link</span><input id="stLinkBooking" type="url" placeholder="https://…" /></label>
+        <label class="fld"><span>Tickets link</span><input id="stLinkTickets" type="url" placeholder="https://…" /></label>
       </div>
       <label class="fld"><span>Note</span><textarea id="stNote" rows="2" maxlength="400"></textarea></label>
       <label class="fld"><span>Location</span><input id="stPlace" type="text" placeholder="Paste a Google Maps link, or 'lat, lng'" /></label>
@@ -149,6 +156,45 @@
     </form>
   </dialog>
 
+  <!-- trip profile dialog -->
+  <dialog id="profileDialog" class="dlg" aria-labelledby="profileTitle">
+    <form class="dlg__form" id="profileForm">
+      <h3 class="dlg__title" id="profileTitle">Trip profile</h3>
+      <div class="fld-row">
+        <label class="fld"><span>Start date</span><input id="pfStartDate" type="date" /></label>
+        <label class="fld"><span>Pace</span><select id="pfPace">
+          <option value="">—</option><option value="relaxed">Relaxed</option><option value="balanced">Balanced</option><option value="packed">Packed</option>
+        </select></label>
+      </div>
+      <div class="fld-row">
+        <label class="fld"><span>Budget level</span><select id="pfBudgetLevel">
+          <option value="">—</option><option value="shoestring">Shoestring</option><option value="mid">Mid</option><option value="comfort">Comfort</option><option value="lux">Lux</option>
+        </select></label>
+        <label class="fld"><span>Daily target (Rp)</span><input id="pfDailyTarget" type="number" min="0" step="1000" inputmode="numeric" placeholder="0" /></label>
+      </div>
+      <label class="fld"><span>Interests (comma-separated)</span><input id="pfInterests" type="text" maxlength="200" placeholder="waterfalls, food, temples" /></label>
+      <div class="fld">
+        <span>Dietary</span>
+        <div class="chip-pick" id="pfDietary"></div>
+      </div>
+      <div class="fld-row">
+        <label class="fld"><span>Adults</span><input id="pfAdults" type="number" min="0" step="1" inputmode="numeric" placeholder="0" /></label>
+        <label class="fld"><span>Kids</span><input id="pfKids" type="number" min="0" step="1" inputmode="numeric" placeholder="0" /></label>
+      </div>
+      <div class="fld-row">
+        <label class="fld"><span>Mobility</span><select id="pfMobility">
+          <option value="">—</option><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="active">Active</option>
+        </select></label>
+        <label class="fld"><span>Home currency</span><input id="pfHomeCurrency" type="text" maxlength="8" placeholder="USD" /></label>
+      </div>
+      <p class="fld__err" id="pfErr" role="alert" hidden></p>
+      <div class="dlg__actions">
+        <button type="button" class="eb-btn" id="pfCancel">Cancel</button>
+        <button type="submit" class="solid-btn solid-btn--sm" id="pfSave">Save</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- AI generate dialog -->
   <dialog id="aiDialog" class="dlg" aria-labelledby="aiTitle">
     <form class="dlg__form" id="aiForm">
@@ -158,6 +204,7 @@
         <label class="fld"><span>Days</span><input id="aiDays" type="number" min="1" max="14" value="3" /></label>
         <label class="fld"><span>Notes (optional)</span><input id="aiNotes" type="text" maxlength="120" placeholder="waterfalls, cafes…" /></label>
       </div>
+      <p class="dlg__hint" id="aiProfileHint" hidden>✨ Using your trip profile (pace, budget, diet, group).</p>
       <p class="dlg__hint">The destination &amp; notes are sent to the configured AI provider.</p>
       <p class="fld__err" id="aiErr" role="alert" hidden></p>
       <div class="dlg__actions">
@@ -206,6 +253,6 @@
     <div class="spin" aria-hidden="true"></div><span id="spinMsg">Working…</span>
   </div>
 
-  <script src="app.js?v=20260617f"></script>
+  <script src="app.js?v=20260617g"></script>
 </body>
 </html>
