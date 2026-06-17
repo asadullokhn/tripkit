@@ -104,39 +104,92 @@
     const b = L.latLngBounds(pts);
     if (animate) map.flyToBounds(b, { ...pad, duration: 0.7 }); else map.fitBounds(b, pad);
   }
-  // road-following routes: fetch driving geometry from OSRM (no key, CORS-ok),
-  // fall back to a dashed straight line while loading or if the request fails.
-  function daySig(di) {
-    return days()[di].stops.filter(hasPin).map((s) => s.lat.toFixed(5) + "," + s.lng.toFixed(5)).join(";");
+  // ---------- transport modes + per-leg, mode-aware routes ----------
+  const MODES = {
+    car:     { icon: "🚗", label: "Drive",   road: true },
+    scooter: { icon: "🛵", label: "Scooter", road: true },
+    taxi:    { icon: "🚕", label: "Taxi",    road: true },
+    public:  { icon: "🚌", label: "Transit", road: true },
+    bike:    { icon: "🚲", label: "Bike",    road: true },
+    walk:    { icon: "🚶", label: "Walk",    road: false },
+    boat:    { icon: "⛴️", label: "Boat",    road: false },
+    flight:  { icon: "✈️", label: "Flight",  road: false },
+  };
+  const modeOf = (s) => (s && MODES[s.mode] ? s.mode : "car");   // how you ARRIVE at s (from the prior pinned stop)
+  const legSig = (a, b, m) => `${a.lat.toFixed(5)},${a.lng.toFixed(5)};${b.lat.toFixed(5)},${b.lng.toFixed(5)};${m}`;
+  function haversineKm(A, B) {
+    const R = 6371, d = (x) => x * Math.PI / 180;
+    const dLat = d(B[0] - A[0]), dLng = d(B[1] - A[1]);
+    const x = Math.sin(dLat / 2) ** 2 + Math.cos(d(A[0])) * Math.cos(d(B[0])) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(x)));
   }
-  async function fetchRoute(sig, pts) {
-    const coords = pts.map((p) => p[1] + "," + p[0]).join(";");   // OSRM expects lng,lat
-    const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+  // gentle queue so a multi-leg / All view doesn't hammer the OSRM demo (rate-limited)
+  const legQueue = []; let legActive = 0;
+  function pumpLegs() {
+    while (legActive < 3 && legQueue.length) {
+      const [sig, A, B] = legQueue.shift(); legActive++;
+      fetchLeg(sig, A, B).then(() => { legActive--; drawRoutes(); refreshLegPills(); pumpLegs(); });
+    }
+  }
+  async function fetchLeg(sig, A, B) {
+    const url = `https://router.project-osrm.org/route/v1/driving/${A[1]},${A[0]};${B[1]},${B[0]}?overview=full&geometries=geojson`;
     const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), 8000);
     try {
-      const res = await fetch(url, { signal: ctrl.signal });
-      if (!res.ok) throw 0;
-      const j = await res.json();
-      const g = j.routes && j.routes[0] && j.routes[0].geometry && j.routes[0].geometry.coordinates;
-      if (!g || !g.length) throw 0;
-      routeCache[sig] = g.map((c) => [c[1], c[0]]);   // → [lat,lng] for Leaflet
-    } catch (_) { routeCache[sig] = null; }            // remember failure → keep straight, don't refetch
+      const res = await fetch(url, { signal: ctrl.signal }); if (!res.ok) throw 0;
+      const j = await res.json(); const r = j.routes && j.routes[0];
+      const g = r && r.geometry && r.geometry.coordinates; if (!g || !g.length) throw 0;
+      routeCache[sig] = { line: g.map((c) => [c[1], c[0]]), dur: r.duration, dist: r.distance };
+    } catch (_) { routeCache[sig] = null; }             // remember failure → keep the dashed fallback
     finally { clearTimeout(timer); }
+  }
+  // a bowed arc for a flight leg (quadratic bezier, control point offset ⟂ to the chord)
+  function arcPts(A, B) {
+    const mid = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2], dx = B[1] - A[1], dy = B[0] - A[0], bow = 0.2;
+    const cy = mid[0] + dx * bow, cx = mid[1] - dy * bow, out = [];
+    for (let t = 0; t <= 1.0001; t += 0.05) { const u = 1 - t;
+      out.push([u * u * A[0] + 2 * u * t * cy + t * t * B[0], u * u * A[1] + 2 * u * t * cx + t * t * B[1]]); }
+    return out;
+  }
+  function drawRoad(c, line) {
+    L.polyline(line, { color: c, weight: 11, opacity: 0.13, lineCap: "round", lineJoin: "round" }).addTo(routeLayer);
+    L.polyline(line, { color: c, weight: 4, opacity: 0.95, lineCap: "round", lineJoin: "round" }).addTo(routeLayer);
+  }
+  function drawDashed(c, pts, dash, w) {
+    L.polyline(pts, { color: c, weight: w + 5, opacity: 0.1, lineCap: "round" }).addTo(routeLayer);
+    L.polyline(pts, { color: c, weight: w, opacity: 0.9, lineCap: "round", dashArray: dash }).addTo(routeLayer);
   }
   function drawRoutes() {
     routeLayer.clearLayers();
     viewDays().forEach((di) => {
-      const pts = days()[di].stops.filter(hasPin).map((s) => [s.lat, s.lng]);
-      if (pts.length < 2) return;
-      const c = dayColor(di), sig = daySig(di), road = routeCache[sig];
-      if (Array.isArray(road)) {                        // real road geometry — solid line + glow
-        L.polyline(road, { color: c, weight: 11, opacity: 0.14, lineCap: "round", lineJoin: "round" }).addTo(routeLayer);
-        L.polyline(road, { color: c, weight: 4, opacity: 0.95, lineCap: "round", lineJoin: "round" }).addTo(routeLayer);
-      } else {                                           // fallback: dashed "as-the-crow-flies"
-        L.polyline(pts, { color: c, weight: 9, opacity: 0.12, lineCap: "round" }).addTo(routeLayer);
-        L.polyline(pts, { color: c, weight: 3.5, opacity: 0.85, lineCap: "round", dashArray: "1 9" }).addTo(routeLayer);
-        if (road === undefined) { routeCache[sig] = "pending"; fetchRoute(sig, pts).then(drawRoutes); }
+      const c = dayColor(di), pins = days()[di].stops.filter(hasPin);
+      for (let i = 0; i < pins.length - 1; i++) {
+        const A = [pins[i].lat, pins[i].lng], B = [pins[i + 1].lat, pins[i + 1].lng], m = modeOf(pins[i + 1]);
+        if (m === "flight") { drawDashed(c, arcPts(A, B), "2 10", 3); continue; }
+        if (m === "boat") { drawDashed(c, [A, B], "2 10", 3); continue; }
+        if (m === "walk") { drawDashed(c, [A, B], "1 8", 3); continue; }
+        const sig = legSig(pins[i], pins[i + 1], m), leg = routeCache[sig];
+        if (leg && leg.line) { drawRoad(c, leg.line); continue; }
+        drawDashed(c, [A, B], "1 9", 3.5);              // fallback while the road leg loads / if it fails
+        if (leg === undefined) { routeCache[sig] = "pending"; legQueue.push([sig, A, B]); pumpLegs(); }
       }
+    });
+  }
+  // label for the leg arriving at b (from the previous pinned stop a)
+  function legLabel(a, b) {
+    const m = modeOf(b), info = MODES[m];
+    if (info.road) {
+      const leg = routeCache[legSig(a, b, m)];
+      if (leg && leg.line) return `${info.icon} ${Math.round(leg.dur / 60)} min · ${(leg.dist / 1000).toFixed(leg.dist < 10000 ? 1 : 0)} km`;
+      return `${info.icon} …`;
+    }
+    const km = haversineKm([a.lat, a.lng], [b.lat, b.lng]);
+    if (m === "walk") return `${info.icon} ${Math.max(1, Math.round(km / 5 * 60))} min · ${km.toFixed(1)} km`;
+    return `${info.icon} ${km < 10 ? km.toFixed(1) : Math.round(km)} km`;   // flight/boat: distance only
+  }
+  function refreshLegPills() {
+    document.querySelectorAll(".leg-pill[data-a]").forEach((el) => {
+      const st = days()[+el.dataset.di] && days()[+el.dataset.di].stops;
+      if (st && st[+el.dataset.a] && st[+el.dataset.b]) el.textContent = legLabel(st[+el.dataset.a], st[+el.dataset.b]);
     });
   }
   function renderMap() {
@@ -177,6 +230,9 @@
     const time = stop.time ? `<span class="stop-time">${esc(stop.time)}</span>` : "";
     const url = stop.url ? `<a class="stop-link" href="${esc(stop.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Maps ↗</a>` : "";
     const nopin = hasPin(stop) ? "" : `<span class="nopin" title="no map pin yet">no pin</span>`;
+    let prevPin = -1;
+    if (hasPin(stop)) for (let j = si - 1; j >= 0; j--) { if (hasPin(day.stops[j])) { prevPin = j; break; } }
+    const legPill = prevPin >= 0 ? `<div class="leg-pill" data-di="${di}" data-a="${prevPin}" data-b="${si}">${esc(legLabel(day.stops[prevPin], stop))}</div>` : "";
     const edit = editing ? `
       <div class="stop-edit">
         <button class="se mv" data-act="up" data-di="${di}" data-si="${si}" title="Move up" aria-label="Move up">▲</button>
@@ -190,6 +246,7 @@
         <button class="stop" data-idx="${gi}">
           <div class="thumb" style="--thumb:linear-gradient(150deg, ${t.g[0]}, ${t.g[1]})"><span>${t.icon}</span></div>
           <div class="stop-body">
+            ${legPill}
             <div class="stop-top"><span class="stop-name">${esc(stop.name)}</span>${time}</div>
             <div class="stop-sub"><span class="type">${esc(t.label)}</span>${nopin}${costChip(stop)}</div>
             ${stop.note ? `<p class="stop-note">${esc(stop.note)}</p>` : ""}
@@ -334,6 +391,7 @@
   const stopDlg = $("#stopDialog"); let stopEdit = null, stopPrefill = null, pickMode = false;
   // build the Type <select> from the TYPE catalogue so labels never drift from the map
   $("#stType").innerHTML = Object.keys(TYPE).map((k) => `<option value="${k}">${TYPE[k].icon} ${esc(TYPE[k].label)}</option>`).join("");
+  $("#stMode").innerHTML = Object.keys(MODES).map((k) => `<option value="${k}">${MODES[k].icon} ${MODES[k].label}</option>`).join("");
   function setCoords(c) {
     $("#stLat").value = c ? c.lat : ""; $("#stLng").value = c ? c.lng : "";
     const el = $("#stCoords"); el.textContent = c ? `📍 ${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}` : "No pin yet"; el.classList.toggle("set", !!c);
@@ -350,7 +408,7 @@
     return { lat, lng };
   }
   function captureStop() {
-    return { name: $("#stName").value, type: $("#stType").value, time: $("#stTime").value,
+    return { name: $("#stName").value, type: $("#stType").value, mode: $("#stMode").value, time: $("#stTime").value,
       url: $("#stUrl").value, note: $("#stNote").value,
       lat: parseFloat($("#stLat").value) || 0, lng: parseFloat($("#stLng").value) || 0 };
   }
@@ -358,7 +416,7 @@
     stopEdit = { di, si };
     const s = prefill || (si != null ? days()[di].stops[si] : {});
     $("#stopTitle").textContent = si != null ? "Edit stop" : "Add stop";
-    $("#stName").value = s.name || ""; $("#stType").value = s.type || "activity";
+    $("#stName").value = s.name || ""; $("#stType").value = s.type || "activity"; $("#stMode").value = s.mode || "car";
     $("#stTime").value = s.time || ""; $("#stUrl").value = s.url || "";
     $("#stNote").value = s.note || ""; $("#stPlace").value = "";
     setCoords((Number.isFinite(s.lat) && (s.lat !== 0 || s.lng !== 0)) ? { lat: s.lat, lng: s.lng } : null);
@@ -389,10 +447,10 @@
     const name = $("#stName").value.trim();
     if (!name) { $("#stErr").textContent = "Name is required"; $("#stErr").hidden = false; $("#stName").focus(); return; }
     const lat = parseFloat($("#stLat").value), lng = parseFloat($("#stLng").value);
-    const s = { name, type: $("#stType").value, time: $("#stTime").value.trim(), url: $("#stUrl").value.trim(),
+    const s = { name, type: $("#stType").value, mode: $("#stMode").value, time: $("#stTime").value.trim(), url: $("#stUrl").value.trim(),
       note: $("#stNote").value.trim(), lat: Number.isFinite(lat) ? lat : 0, lng: Number.isFinite(lng) ? lng : 0 };
     const { di, si } = stopEdit;
-    if (si != null) { s.id = days()[di].stops[si].id; s.linkedExpenseId = days()[di].stops[si].linkedExpenseId; days()[di].stops[si] = s; }
+    if (si != null) { const o = days()[di].stops[si]; s.id = o.id; s.linkedExpenseId = o.linkedExpenseId; s.done = o.done; s.durationMin = o.durationMin; s.cost = o.cost; s.links = o.links; days()[di].stops[si] = s; }
     else days()[di].stops.push(s);
     stopDlg.close(); renderSheet(); renderMap(); saveItin("Saved");
   });

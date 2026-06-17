@@ -22,7 +22,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <link rel="stylesheet" href="/shared/tokens.css?v=1" />
-  <link rel="stylesheet" href="styles.css?v=20260617d" />
+  <link rel="stylesheet" href="styles.css?v=20260617f" />
 </head>
 <body>
   <!-- passcode gate -->
@@ -106,7 +106,10 @@
     <form class="dlg__form" id="stopForm">
       <h3 class="dlg__title" id="stopTitle">Add stop</h3>
       <label class="fld"><span>Name</span><input id="stName" type="text" maxlength="80" required /></label>
-      <label class="fld"><span>Type</span><select id="stType"></select></label>
+      <div class="fld-row">
+        <label class="fld"><span>Type</span><select id="stType"></select></label>
+        <label class="fld"><span>Arrive by</span><select id="stMode"></select></label>
+      </div>
       <div class="fld-row">
         <label class="fld"><span>Time</span><input id="stTime" type="text" maxlength="12" placeholder="08:30" /></label>
         <label class="fld"><span>Maps URL</span><input id="stUrl" type="url" placeholder="https://…" /></label>
@@ -203,6 +206,6 @@
     <div class="spin" aria-hidden="true"></div><span id="spinMsg">Working…</span>
   </div>
 
-  <script src="app.js?v=20260617e"></script>
+  <script src="app.js?v=20260617f"></script>
 </body>
 </html>

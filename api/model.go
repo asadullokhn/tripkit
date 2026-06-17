@@ -66,18 +66,30 @@ type Adjustment struct {
 // A point on the itinerary. LinkedExpenseID optionally ties a stop to a shared
 // cost so the map can show what it cost and jump to the splitter.
 type Stop struct {
-	ID              string  `json:"id"`
-	Name            string  `json:"name"`
-	Type            string  `json:"type,omitempty"` // start|fuel|food|hotel|beach|viewpoint|...
-	Badge           string  `json:"badge,omitempty"`
-	Note            string  `json:"note,omitempty"`
-	Lat             float64 `json:"lat"`
-	Lng             float64 `json:"lng"`
-	Time            string  `json:"time,omitempty"`
-	URL             string  `json:"url,omitempty"`
-	Rating          float64 `json:"rating,omitempty"`
-	LinkedExpenseID string  `json:"linkedExpenseId,omitempty"`
-	Done            bool    `json:"done,omitempty"` // checked off during the trip (shared group state)
+	ID              string     `json:"id"`
+	Name            string     `json:"name"`
+	Type            string     `json:"type,omitempty"` // start|fuel|food|hotel|beach|viewpoint|...
+	Badge           string     `json:"badge,omitempty"`
+	Note            string     `json:"note,omitempty"`
+	Lat             float64    `json:"lat"`
+	Lng             float64    `json:"lng"`
+	Time            string     `json:"time,omitempty"`
+	URL             string     `json:"url,omitempty"`
+	Rating          float64    `json:"rating,omitempty"`
+	LinkedExpenseID string     `json:"linkedExpenseId,omitempty"`
+	Done            bool       `json:"done,omitempty"`        // checked off during the trip (shared group state)
+	Mode            string     `json:"mode,omitempty"`        // how you ARRIVE here: car|scooter|taxi|public|bike|walk|boat|flight
+	DurationMin     int        `json:"durationMin,omitempty"` // planned visit length, minutes
+	Cost            int        `json:"cost,omitempty"`        // estimated cost, minor units (planning only; actuals live in Bills)
+	Links           *StopLinks `json:"links,omitempty"`       // typed source links
+}
+
+// StopLinks holds the typed source links the planner/AI can attach to a stop.
+type StopLinks struct {
+	Maps    string `json:"maps,omitempty"`
+	Booking string `json:"booking,omitempty"`
+	Tickets string `json:"tickets,omitempty"`
+	Site    string `json:"site,omitempty"`
 }
 
 type Day struct {

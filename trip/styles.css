@@ -644,6 +644,7 @@ body.sheet-hidden .sheet-hide { opacity: 0; pointer-events: none; }
 .fld { display:grid; gap:5px; font-family:"DM Mono",monospace; font-size:.66rem; letter-spacing:.05em; text-transform:uppercase; color:var(--muted,#8fa395); }
 .fld-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 .fld-row--pick { grid-template-columns:auto 1fr; align-items:center; }
+.leg-pill { display:inline-flex; align-items:center; gap:5px; align-self:flex-start; font-family:"DM Mono", ui-monospace, monospace; font-size:.66rem; color:var(--muted, #8fa395); background:var(--panel-2, rgba(255,255,255,.05)); border:1px solid var(--line, rgba(255,255,255,.08)); border-radius:999px; padding:2px 8px; margin:0 0 6px; white-space:nowrap; }
 .fld__hint { font-family:"DM Mono", ui-monospace, monospace; font-size:.74rem; color:var(--muted-2,#6d8174); }
 .fld__hint.set { color:var(--day,#34dfc0); }
 body.picking #map { cursor:crosshair; }
