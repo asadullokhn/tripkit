@@ -115,11 +115,13 @@
     return null;
   }
 
+  let lastSyncStatus = "syncing";
   function setSync(status) {
+    lastSyncStatus = status;
     const el = $("#sync"); if (!el) return;
     el.classList.toggle("live", status === "live");
     el.classList.toggle("offline", status === "offline");
-    $("#syncLabel").textContent = status === "live" ? "live" : status === "offline" ? "offline" : "syncing…";
+    $("#syncLabel").textContent = status === "live" ? I18N.t("split.sync.live", "live") : status === "offline" ? I18N.t("split.sync.offline", "offline") : I18N.t("split.sync.syncing", "syncing…");
   }
 
   // A write returns the full doc; adopt + re-render. opts: { rollback, okMsg, errMsg }
@@ -128,12 +130,12 @@
     return promise
       .then((d) => { adoptDoc(d); render(); setSync("live"); if (opts.okMsg) toast(opts.okMsg, { type: "ok" }); return d; })
       .catch((e) => {
-        if (e.code === 401) { lock("Session expired — enter passcode"); }
-        else if (e.code === 403) { setSync("offline"); if (opts.rollback) { opts.rollback(); render(); } toast("Log in to make changes", { type: "err" }); refreshTrip(); }
+        if (e.code === 401) { lock(I18N.t("split.lock.sessionExpired", "Session expired — enter passcode")); }
+        else if (e.code === 403) { setSync("offline"); if (opts.rollback) { opts.rollback(); render(); } toast(I18N.t("split.toast.loginToChange", "Log in to make changes"), { type: "err" }); refreshTrip(); }
         else {
           setSync("offline");
           if (opts.rollback) { opts.rollback(); render(); }
-          toast(opts.errMsg || "Couldn't save — change undone", { type: "err", action: opts.retry, actionLabel: opts.retry ? "Retry" : undefined });
+          toast(opts.errMsg || I18N.t("split.toast.saveFailed", "Couldn't save — change undone"), { type: "err", action: opts.retry, actionLabel: opts.retry ? I18N.t("common.retry", "Retry") : undefined });
         }
         throw e;
       })
@@ -213,7 +215,7 @@
     b.style.setProperty("--c", pcol(pid));
     b.dataset.pid = pid;
     b.setAttribute("aria-pressed", active ? "true" : "false");
-    b.setAttribute("aria-label", (active ? "Sharing: " : "Not sharing: ") + pname(pid));
+    b.setAttribute("aria-label", (active ? I18N.t("split.chip.sharing", "Sharing: ") : I18N.t("split.chip.notSharing", "Not sharing: ")) + pname(pid));
     b.textContent = pname(pid);
     if (canEdit && onClick) b.addEventListener("click", onClick);
     return b;
@@ -233,14 +235,14 @@
   function assignStack(ids, label, onOpen) {
     const wrap = document.createElement("button");
     wrap.type = "button"; wrap.className = "assign";
-    wrap.setAttribute("aria-label", ids.length ? `${label}: ${ids.map(pname).join(", ")} — tap to change` : `${label}: nobody — tap to assign`);
-    if (!ids.length) { wrap.classList.add("assign--empty"); wrap.textContent = "Assign people"; }
+    wrap.setAttribute("aria-label", ids.length ? I18N.t("split.assign.changeAria", "{label}: {names} — tap to change", { label, names: ids.map(pname).join(", ") }) : I18N.t("split.assign.assignAria", "{label}: nobody — tap to assign", { label }));
+    if (!ids.length) { wrap.classList.add("assign--empty"); wrap.textContent = I18N.t("split.assign.empty", "Assign people"); }
     else {
       const stack = document.createElement("span"); stack.className = "avatar-stack";
       ids.slice(0, 6).forEach((id) => stack.appendChild(avatar(id)));
       if (ids.length > 6) { const more = document.createElement("span"); more.className = "avatar avatar--more"; more.textContent = "+" + (ids.length - 6); more.setAttribute("aria-hidden", "true"); stack.appendChild(more); }
       wrap.appendChild(stack);
-      const cap = document.createElement("span"); cap.className = "assign__cap"; cap.textContent = ids.length + (ids.length === 1 ? " person" : " people");
+      const cap = document.createElement("span"); cap.className = "assign__cap"; cap.textContent = ids.length === 1 ? I18N.t("split.assign.countOne", "{n} person", { n: ids.length }) : I18N.t("split.assign.countMany", "{n} people", { n: ids.length });
       wrap.appendChild(cap);
     }
     if (canEdit && onOpen) wrap.addEventListener("click", onOpen);
@@ -251,12 +253,12 @@
   // ---------- render: people bar ----------
   function renderPeopleBar() {
     const el = $("#peopleBar"); el.innerHTML = "";
-    if (!doc.people.length) { el.innerHTML = `<span class="empty-hint">No people yet${admin ? " — add some to start." : "."}</span>`; return; }
+    if (!doc.people.length) { el.innerHTML = `<span class="empty-hint">${esc(admin ? I18N.t("split.people.emptyAdmin", "No people yet — add some to start.") : I18N.t("split.people.empty", "No people yet."))}</span>`; return; }
     doc.people.forEach((p) => {
       const chip = document.createElement(admin ? "button" : "span");
       chip.className = "pbar-chip"; chip.style.setProperty("--c", personColor[p.id]);
       chip.innerHTML = `<span class="pbar-dot"></span>${esc(p.name)}`;
-      if (admin) { chip.type = "button"; chip.setAttribute("aria-label", "Edit person: " + p.name); chip.addEventListener("click", () => openPerson(p)); }
+      if (admin) { chip.type = "button"; chip.setAttribute("aria-label", I18N.t("split.people.editAria", "Edit person: {name}", { name: p.name })); chip.addEventListener("click", () => openPerson(p)); }
       el.appendChild(chip);
     });
   }
@@ -264,26 +266,50 @@
   // ---------- render: shared costs ----------
   function expenseShareText(e) {
     const keys = Object.keys(e.shares || {}).filter((id) => personById[id]);
-    if (!keys.length) return "Not assigned yet";
+    if (!keys.length) return esc(I18N.t("split.notAssigned", "Not assigned yet"));
     const mode = e.splitMode || "EVENLY";
     const names = keys.map(pname).join(", ");
-    if (mode === "EVENLY") return `${esc(names)} · ${money((e.amount || 0) / keys.length)} each`;
-    return `${esc(names)} · split ${mode.replace("BY_", "by ").toLowerCase()}`;
+    if (mode === "EVENLY") return `${esc(names)} · ${esc(I18N.t("split.shareEach", "{amount} each", { amount: money((e.amount || 0) / keys.length) }))}`;
+    return `${esc(names)} · ${esc(I18N.t("split.splitMode", "split {mode}", { mode: mode.replace("BY_", "by ").toLowerCase() }))}`;
   }
+  // ---------- collapsible cards (progressive disclosure; per-trip view state, client-only) ----------
+  function collapsedSet() { try { return new Set(JSON.parse(localStorage.getItem("tk-collapse-" + tripId) || "[]")); } catch (_) { return new Set(); } }
+  function saveCollapsed(s) { try { localStorage.setItem("tk-collapse-" + tripId, JSON.stringify([...s])); } catch (_) {} }
+  function statusPill(done, label) {
+    return done ? `<span class="card-status done">✓ ${esc(I18N.t("split.collapse.done", "done"))}</span>`
+                : `<span class="card-status">${esc(label)}</span>`;
+  }
+  function makeCollapsible(card, head, cid, statusHtml) {
+    card.dataset.cid = cid;
+    const body = document.createElement("div"); body.className = "card-body";
+    const inner = document.createElement("div"); inner.className = "card-body-inner";
+    while (head.nextSibling) inner.appendChild(head.nextSibling);   // fold the details under the head
+    body.appendChild(inner); card.appendChild(body);
+    const tools = document.createElement("div"); tools.className = "card-tools";
+    if (statusHtml) tools.innerHTML = statusHtml;
+    const tg = document.createElement("button"); tg.type = "button"; tg.className = "card-collapse";
+    tg.setAttribute("aria-label", I18N.t("split.collapse.aria", "Collapse or expand details"));
+    tg.innerHTML = `<span class="chev" aria-hidden="true">▾</span>`;
+    tools.appendChild(tg); head.appendChild(tools);
+    const apply = (c) => { card.classList.toggle("is-collapsed", c); tg.setAttribute("aria-expanded", c ? "false" : "true"); };
+    apply(collapsedSet().has(cid));
+    tg.addEventListener("click", (ev) => { ev.stopPropagation(); const s = collapsedSet(); const c = !card.classList.contains("is-collapsed"); if (c) s.add(cid); else s.delete(cid); saveCollapsed(s); apply(c); });
+  }
+
   function renderShared() {
     const wrap = $("#shared"); wrap.innerHTML = "";
-    if (!doc.expenses.length) { wrap.innerHTML = `<p class="empty-hint">No shared costs${canEdit ? " — add one." : "."}</p>`; return; }
+    if (!doc.expenses.length) { wrap.innerHTML = `<p class="empty-hint">${esc(canEdit ? I18N.t("split.shared.emptyEdit", "No shared costs — add one.") : I18N.t("split.shared.empty", "No shared costs."))}</p>`; return; }
     doc.expenses.forEach((e) => {
       const card = document.createElement("article"); card.className = "expense"; card.id = "expense-" + e.id;
       const head = document.createElement("div"); head.className = "expense__head";
       head.innerHTML = `
         <div>
           <h3 class="expense__name">${esc(e.title)}</h3>
-          <div class="payer">paid by <b style="color:${pcol(e.payerId)}">${esc(pname(e.payerId))}</b>
+          <div class="payer">${esc(I18N.t("split.paidBy", "paid by"))} <b style="color:${pcol(e.payerId)}">${esc(pname(e.payerId))}</b>
             ${(e.splitMode && e.splitMode !== "EVENLY") ? `<span class="tag">${esc(e.splitMode.replace("BY_", "").toLowerCase())}</span>` : ""}</div>
         </div>
         <div class="expense__amt">${money(e.amount)}</div>`;
-      if (canEdit) head.appendChild(mkEdit(() => openExpense(e), "Edit shared cost: " + e.title));
+      if (canEdit) head.appendChild(mkEdit(() => openExpense(e), I18N.t("split.shared.editAria", "Edit shared cost: {name}", { name: e.title })));
       card.appendChild(head);
 
       const evenly = (e.splitMode || "EVENLY") === "EVENLY";
@@ -292,8 +318,8 @@
       if (bigMode() || !evenly) {
         // condensed: tap to open picker (evenly) or the expense dialog (weighted)
         const row = document.createElement("div"); row.className = "assign-row";
-        row.appendChild(assignStack(memberIds, "Shared by", () => {
-          if (evenly) openPicker({ title: e.title || "Shared by", selected: memberIds, onSave: (ids) => setExpenseMembers(e, ids) });
+        row.appendChild(assignStack(memberIds, I18N.t("split.expense.sharedBy", "Shared by"), () => {
+          if (evenly) openPicker({ title: e.title || I18N.t("split.expense.sharedBy", "Shared by"), selected: memberIds, onSave: (ids) => setExpenseMembers(e, ids) });
           else openExpense(e);
         }));
         card.appendChild(row);
@@ -305,14 +331,15 @@
         });
         if (canEdit) {
           const q = document.createElement("span"); q.className = "chip-quick";
-          q.append(mkMini("Everyone", () => setExpenseMembers(e, doc.people.map((p) => p.id)), "Share with everyone"),
-                   mkMini("Clear", () => setExpenseMembers(e, []), "Clear sharers"));
+          q.append(mkMini(I18N.t("split.quick.everyone", "Everyone"), () => setExpenseMembers(e, doc.people.map((p) => p.id)), I18N.t("split.quick.shareEveryoneAria", "Share with everyone")),
+                   mkMini(I18N.t("common.clear", "Clear"), () => setExpenseMembers(e, []), I18N.t("split.quick.clearSharersAria", "Clear sharers")));
           chips.appendChild(q);
         }
         card.appendChild(chips);
       }
       const note = document.createElement("div"); note.className = "split-note"; note.innerHTML = expenseShareText(e);
       card.appendChild(note);
+      makeCollapsible(card, head, "e" + e.id, statusPill(memberIds.length > 0, I18N.t("split.collapse.unassigned", "unassigned")));
       wrap.appendChild(card);
     });
   }
@@ -320,14 +347,14 @@
   // ---------- render: receipts ----------
   function itemShareText(rc, it) {
     const sh = (it.sharedBy || []).filter((id) => personById[id]);
-    if (!sh.length) return "Not assigned yet";
+    if (!sh.length) return esc(I18N.t("split.notAssigned", "Not assigned yet"));
     const ratio = (rc.grandTotal || sumItems(rc.items)) / (sumItems(rc.items) || 1);
     const per = ((it.lineTotal || 0) * ratio) / sh.length;
-    return `${esc(sh.map(pname).join(", "))} · <b>${money(per)}</b> each`;
+    return `${esc(sh.map(pname).join(", "))} · ${I18N.t("split.shareEachBold", "<b>{amount}</b> each", { amount: money(per) })}`;
   }
   function renderReceipts() {
     const wrap = $("#receipts"); wrap.innerHTML = "";
-    if (!doc.receipts.length) { wrap.innerHTML = `<p class="empty-hint">No receipts${canEdit ? " — add one." : "."}</p>`; return; }
+    if (!doc.receipts.length) { wrap.innerHTML = `<p class="empty-hint">${esc(canEdit ? I18N.t("split.receipts.emptyEdit", "No receipts — add one.") : I18N.t("split.receipts.empty", "No receipts."))}</p>`; return; }
     doc.receipts.slice().sort((a, b) => dateSortKey(a).localeCompare(dateSortKey(b))).forEach((rc) => {
       const grand = rc.grandTotal || sumItems(rc.items);
       const card = document.createElement("article"); card.className = "receipt";
@@ -337,10 +364,10 @@
         <div>
           <h3 class="receipt__name">${esc(rc.title)}</h3>
           ${meta ? `<div class="receipt__meta">${esc(meta)}</div>` : ""}
-          <div class="payer">paid by <b style="color:${pcol(rc.payerId)}">${esc(pname(rc.payerId))}</b></div>
+          <div class="payer">${esc(I18N.t("split.paidBy", "paid by"))} <b style="color:${pcol(rc.payerId)}">${esc(pname(rc.payerId))}</b></div>
         </div>
         <div class="receipt__totals"><div class="receipt__grand">${money(grand)}</div></div>`;
-      if (canEdit) head.appendChild(mkEdit(() => openReceipt(rc), "Edit receipt: " + rc.title));
+      if (canEdit) head.appendChild(mkEdit(() => openReceipt(rc), I18N.t("split.receipts.editAria", "Edit receipt: {name}", { name: rc.title })));
       card.appendChild(head);
 
       const ul = document.createElement("ul"); ul.className = "items";
@@ -348,7 +375,7 @@
         const li = document.createElement("li"); li.className = "item";
         const top = document.createElement("div"); top.className = "item__top";
         const qty = it.quantity && it.quantity > 1 ? `<span class="item__qty">×${it.quantity}</span>` : "";
-        const flag = it.needsReview ? `<span class="warn" title="${esc(it.note || "Needs review")}" aria-label="Needs review">⚠</span>` : "";
+        const flag = it.needsReview ? `<span class="warn" title="${esc(it.note || I18N.t("split.item.needsReview", "Needs review"))}" aria-label="${esc(I18N.t("split.item.needsReview", "Needs review"))}">⚠</span>` : "";
         top.innerHTML = `<span class="item__name">${esc(it.name)}${qty}${flag}</span>
           <span class="item__price">${money(it.lineTotal || 0)}</span>`;
         li.appendChild(top);
@@ -356,8 +383,8 @@
         const sharers = (it.sharedBy || []).filter((id) => personById[id]);
         if (bigMode()) {
           const row = document.createElement("div"); row.className = "assign-row";
-          row.appendChild(assignStack(sharers, "Shared by", () =>
-            openPicker({ title: it.name || "Shared by", selected: sharers, onSave: (ids) => setItemSharers(rc, it, ids) })));
+          row.appendChild(assignStack(sharers, I18N.t("split.expense.sharedBy", "Shared by"), () =>
+            openPicker({ title: it.name || I18N.t("split.expense.sharedBy", "Shared by"), selected: sharers, onSave: (ids) => setItemSharers(rc, it, ids) })));
           li.appendChild(row);
         } else {
           const chips = document.createElement("div"); chips.className = "chips";
@@ -365,8 +392,8 @@
             () => toggleItemSharer(rc, it, p.id))));
           if (canEdit) {
             const q = document.createElement("span"); q.className = "chip-quick";
-            q.append(mkMini("Everyone", () => setItemSharers(rc, it, doc.people.map((p) => p.id)), "Everyone shared this"),
-                     mkMini("Clear", () => setItemSharers(rc, it, []), "Clear sharers"));
+            q.append(mkMini(I18N.t("split.quick.everyone", "Everyone"), () => setItemSharers(rc, it, doc.people.map((p) => p.id)), I18N.t("split.quick.everyoneSharedAria", "Everyone shared this")),
+                     mkMini(I18N.t("common.clear", "Clear"), () => setItemSharers(rc, it, []), I18N.t("split.quick.clearSharersAria", "Clear sharers")));
             chips.appendChild(q);
           }
           li.appendChild(chips);
@@ -376,13 +403,15 @@
         ul.appendChild(li);
       });
       card.appendChild(ul);
+      const unassigned = (rc.items || []).filter((it) => !(it.sharedBy || []).filter((id) => personById[id]).length).length;
+      makeCollapsible(card, head, "r" + rc.id, statusPill(unassigned === 0, I18N.t("split.collapse.toAssign", "{n} to assign", { n: unassigned })));
       wrap.appendChild(card);
     });
   }
 
   function mkEdit(fn, aria) {
     const b = document.createElement("button");
-    b.className = "edit-btn"; b.type = "button"; b.setAttribute("aria-label", aria || "Edit"); b.title = "Edit";
+    b.className = "edit-btn"; b.type = "button"; b.setAttribute("aria-label", aria || I18N.t("common.edit", "Edit")); b.title = I18N.t("common.edit", "Edit");
     b.innerHTML = `<span aria-hidden="true">✎</span>`;
     b.addEventListener("click", fn); return b;
   }
@@ -390,16 +419,16 @@
   // ---------- render: settle panel + final ----------
   function fillTransfers(el, transfers, big) {
     el.innerHTML = "";
-    if (!transfers.length) { el.innerHTML = `<li class="${big ? "ftransfer" : "transfer"} empty">All square 🎉</li>`; return; }
+    if (!transfers.length) { el.innerHTML = `<li class="${big ? "ftransfer" : "transfer"} empty">${esc(I18N.t("split.allSquare", "All square"))} 🎉</li>`; return; }
     transfers.forEach((t) => {
       const li = document.createElement("li");
-      li.setAttribute("aria-label", `${pname(t.from)} pays ${pname(t.to)} ${money(t.amount)}`);
+      li.setAttribute("aria-label", I18N.t("split.transfer.aria", "{from} pays {to} {amount}", { from: pname(t.from), to: pname(t.to), amount: money(t.amount) }));
       if (big) {
         li.className = "ftransfer";
         li.innerHTML = `<span class="ftransfer__who">
             <span class="person__dot" style="--c:${pcol(t.from)}" aria-hidden="true"></span>
             <b style="color:${pcol(t.from)}">${esc(pname(t.from))}</b>
-            <span class="ftransfer__verb" aria-hidden="true">pays</span>
+            <span class="ftransfer__verb" aria-hidden="true">${esc(I18N.t("split.pays", "pays"))}</span>
             <b style="color:${pcol(t.to)}">${esc(pname(t.to))}</b>
           </span><span class="ftransfer__amt">${money(t.amount)}</span>`;
       } else {
@@ -415,23 +444,23 @@
   function personRow(p, c) {
     const n = c.net[p.id];
     const sign = n > 0.5 ? "pos" : n < -0.5 ? "neg" : "";
-    const label = n > 0.5 ? "gets back" : n < -0.5 ? "owes" : "settled";
+    const label = n > 0.5 ? I18N.t("split.net.getsBack", "gets back") : n < -0.5 ? I18N.t("split.net.owes", "owes") : I18N.t("split.net.settled", "settled");
     const row = document.createElement("div"); row.className = "person";
-    row.setAttribute("aria-label", `${p.name} ${label} ${money(Math.abs(n))}; consumed ${money(c.consumed[p.id])}, paid ${money(c.paid[p.id])}`);
+    row.setAttribute("aria-label", I18N.t("split.person.aria", "{name} {label} {net}; consumed {consumed}, paid {paid}", { name: p.name, label, net: money(Math.abs(n)), consumed: money(c.consumed[p.id]), paid: money(c.paid[p.id]) }));
     row.innerHTML = `
       <span class="person__dot" style="--c:${personColor[p.id]}" aria-hidden="true"></span>
       <span><span class="person__name">${esc(p.name)}</span>
-        <span class="person__sub">had ${money(c.consumed[p.id])} · paid ${money(c.paid[p.id])}</span></span>
-      <span class="person__net ${sign}">${money(Math.abs(n))}<small>${label}</small></span>`;
+        <span class="person__sub">${esc(I18N.t("split.person.hadPaid", "had {consumed} · paid {paid}", { consumed: money(c.consumed[p.id]), paid: money(c.paid[p.id]) }))}</span></span>
+      <span class="person__net ${sign}">${money(Math.abs(n))}<small>${esc(label)}</small></span>`;
     // payout / bank details — only meaningful for receivers (net > 0), or anyone who already set one
     const val = personById[p.id] && personById[p.id].bankAccount;
     if (n > 0 || val) {
       const mid = row.querySelector(".person__sub").parentNode;
       const pay = document.createElement("span"); pay.className = "person__payout";
-      pay.innerHTML = `<span class="person__payout-label">payout</span><span class="person__payout-val${val ? "" : " muted"}">${esc(val || "not set")}</span>`;
+      pay.innerHTML = `<span class="person__payout-label">${esc(I18N.t("split.payout.label", "payout"))}</span><span class="person__payout-val${val ? "" : " muted"}">${esc(val || I18N.t("split.payout.notSet", "not set"))}</span>`;
       if (canEdit) {
         const e = document.createElement("button"); e.type = "button"; e.className = "payout-edit";
-        e.setAttribute("aria-label", "Edit payout for " + p.name); e.innerHTML = `<span aria-hidden="true">✎</span>`;
+        e.setAttribute("aria-label", I18N.t("split.payout.editAria", "Edit payout for {name}", { name: p.name })); e.innerHTML = `<span aria-hidden="true">✎</span>`;
         e.addEventListener("click", () => openBank(p)); pay.appendChild(e);
       }
       mid.appendChild(pay);
@@ -452,7 +481,7 @@
       owing.concat(getting).forEach((p) => peopleEl.appendChild(personRow(p, c)));
       if (settled.length) {
         const det = document.createElement("details"); det.className = "settled-group";
-        const sum = document.createElement("summary"); sum.textContent = `All settled (${settled.length})`; det.appendChild(sum);
+        const sum = document.createElement("summary"); sum.textContent = I18N.t("split.allSettled", "All settled ({n})", { n: settled.length }); det.appendChild(sum);
         settled.forEach((p) => det.appendChild(personRow(p, c))); peopleEl.appendChild(det);
       }
     } else {
@@ -460,17 +489,17 @@
     }
 
     const adjEl = $("#adjustList"); adjEl.innerHTML = "";
-    if (!doc.adjustments.length) adjEl.innerHTML = `<li class="empty-hint">No manual adjustments.</li>`;
+    if (!doc.adjustments.length) adjEl.innerHTML = `<li class="empty-hint">${esc(I18N.t("split.adjust.empty", "No manual adjustments."))}</li>`;
     else doc.adjustments.forEach((a) => {
-      const verb = a.kind === "payment" ? "paid" : "→";
+      const verb = a.kind === "payment" ? I18N.t("split.adjust.paid", "paid") : "→";
       const li = document.createElement("li"); li.className = "adjust__item" + (a.kind === "payment" ? " is-payment" : "");
       li.innerHTML = `<span><b style="color:${pcol(a.fromId)}">${esc(pname(a.fromId))}</b>
-        <span class="verb">${verb}</span> <b style="color:${pcol(a.toId)}">${esc(pname(a.toId))}</b>
+        <span class="verb">${esc(verb)}</span> <b style="color:${pcol(a.toId)}">${esc(pname(a.toId))}</b>
         ${a.label ? `<span class="lbl">${esc(a.label)}</span>` : ""}</span>
         <span class="amt">${money(a.amount)}</span>`;
       if (canEdit) {
         const del = document.createElement("button");
-        del.className = "adjust__del"; del.type = "button"; del.setAttribute("aria-label", "Remove adjustment");
+        del.className = "adjust__del"; del.type = "button"; del.setAttribute("aria-label", I18N.t("split.adjust.removeAria", "Remove adjustment"));
         del.innerHTML = `<span aria-hidden="true">✕</span>`;
         del.addEventListener("click", () => deleteAdjustment(a));
         li.appendChild(del);
@@ -481,18 +510,25 @@
     renderSettlement(c); // #finalTransfers, #settleAdmin, #planStale, #fabLabel (published plan vs live)
     const fn = $("#finalNote");
     if (fn) fn.textContent = c.unassignedCount
-      ? `Note: ${c.unassignedCount} line${c.unassignedCount > 1 ? "s" : ""} (${money(c.unassignedTotal)}) still unassigned — assign them for an exact split.` : "";
+      ? (c.unassignedCount > 1
+          ? I18N.t("split.finalNote.many", "Note: {n} lines ({amount}) still unassigned — assign them for an exact split.", { n: c.unassignedCount, amount: money(c.unassignedTotal) })
+          : I18N.t("split.finalNote.one", "Note: {n} line ({amount}) still unassigned — assign them for an exact split.", { n: c.unassignedCount, amount: money(c.unassignedTotal) }))
+      : "";
 
     const pct = c.totalLines ? Math.round((c.assignedLines / c.totalLines) * 100) : 0;
     $("#progressFill").style.width = pct + "%";
-    $("#progressLabel").textContent = `${c.assignedLines} of ${c.totalLines} lines assigned`;
+    $("#progressLabel").textContent = I18N.t("split.progress.label", "{done} of {total} lines assigned", { done: c.assignedLines, total: c.totalLines });
   }
 
   // ---------- settlement plan (publish / proof / verify) ----------
   const txSig = (t) => [t.from || t.fromId, t.to || t.toId, t.amount];
   const planSig = (list) => JSON.stringify(list.map(txSig).sort());
   function statusBadge(st) {
-    const map = { pending: ["badge--pending", "pending"], submitted: ["badge--submitted", "proof uploaded"], verified: ["badge--verified", "✓ paid"] };
+    const map = {
+      pending: ["badge--pending", I18N.t("split.badge.pending", "pending")],
+      submitted: ["badge--submitted", I18N.t("split.badge.submitted", "proof uploaded")],
+      verified: ["badge--verified", I18N.t("split.badge.verified", "✓ paid")],
+    };
     const [cls, label] = map[st] || map.pending;
     return `<span class="badge ${cls}">${esc(label)}</span>`;
   }
@@ -506,12 +542,12 @@
       const liveAsPlan = live.map((t) => ({ fromId: t.from, toId: t.to, amount: t.amount }));
       if (planStale) planStale.hidden = (planSig(live) === planSig(pub.transfers));
       const pend = pub.transfers.filter((t) => t.status !== "verified").length;
-      $("#fabLabel").textContent = pend ? `Settle up · ${pend} to pay` : "All settled ✓";
+      $("#fabLabel").textContent = pend ? I18N.t("split.fab.toPay", "Settle up · {n} to pay", { n: pend }) : I18N.t("split.fab.allSettled", "All settled ✓");
       void liveAsPlan;
     } else {
       fillTransfers($("#finalTransfers"), live, true);
       if (planStale) planStale.hidden = true;
-      $("#fabLabel").textContent = live.length ? `Settle up · ${live.length} payment${live.length > 1 ? "s" : ""}` : "All square";
+      $("#fabLabel").textContent = live.length ? (live.length > 1 ? I18N.t("split.fab.paymentsMany", "Settle up · {n} payments", { n: live.length }) : I18N.t("split.fab.paymentsOne", "Settle up · {n} payment", { n: live.length })) : I18N.t("split.fab.allSquare", "All square");
     }
   }
   function renderSettleAdmin(pub, live) {
@@ -519,53 +555,53 @@
     if (!admin) return;
     if (!pub) {
       if (!live.length) return;
-      const b = document.createElement("button"); b.type = "button"; b.className = "solid-btn"; b.textContent = "Publish settlement plan";
+      const b = document.createElement("button"); b.type = "button"; b.className = "solid-btn"; b.textContent = I18N.t("split.settle.publish", "Publish settlement plan");
       b.addEventListener("click", publishSettlement); el.appendChild(b);
     } else {
-      const rg = document.createElement("button"); rg.type = "button"; rg.className = "ghost-btn ghost-btn--sm"; rg.textContent = "Re-generate from balances";
+      const rg = document.createElement("button"); rg.type = "button"; rg.className = "ghost-btn ghost-btn--sm"; rg.textContent = I18N.t("split.settle.regenerate", "Re-generate from balances");
       rg.addEventListener("click", regenerateSettlement); el.appendChild(rg);
-      const un = document.createElement("button"); un.type = "button"; un.className = "ghost-btn ghost-btn--sm"; un.textContent = "Unpublish";
+      const un = document.createElement("button"); un.type = "button"; un.className = "ghost-btn ghost-btn--sm"; un.textContent = I18N.t("split.settle.unpublish", "Unpublish");
       un.addEventListener("click", unpublishSettlement); el.appendChild(un);
     }
   }
   function renderPlanCards(el, transfers) {
     el.innerHTML = "";
-    if (!transfers.length) { el.innerHTML = `<li class="ftransfer empty">All square 🎉</li>`; return; }
+    if (!transfers.length) { el.innerHTML = `<li class="ftransfer empty">${esc(I18N.t("split.allSquare", "All square"))} 🎉</li>`; return; }
     transfers.forEach((t) => {
       const payee = personById[t.toId];
       const bank = payee && payee.bankAccount ? payee.bankAccount : "";
       const li = document.createElement("li"); li.className = "plan-card status-" + (t.status || "pending");
-      li.setAttribute("aria-label", `${pname(t.fromId)} pays ${pname(t.toId)} ${money(t.amount)} — ${t.status || "pending"}`);
+      li.setAttribute("aria-label", I18N.t("split.planCard.aria", "{from} pays {to} {amount} — {status}", { from: pname(t.fromId), to: pname(t.toId), amount: money(t.amount), status: t.status || "pending" }));
 
       const top = document.createElement("div"); top.className = "plan-card__top";
       top.innerHTML = `<span class="plan-who">
           <span class="person__dot" style="--c:${pcol(t.fromId)}" aria-hidden="true"></span>
           <b style="color:${pcol(t.fromId)}">${esc(pname(t.fromId))}</b>
-          <span class="ftransfer__verb" aria-hidden="true">pays</span>
+          <span class="ftransfer__verb" aria-hidden="true">${esc(I18N.t("split.pays", "pays"))}</span>
           <b style="color:${pcol(t.toId)}">${esc(pname(t.toId))}</b></span>
         <span class="plan-amt">${money(t.amount)}</span>`;
       li.appendChild(top);
 
       const bankRow = document.createElement("div"); bankRow.className = "plan-bank";
       if (bank) {
-        bankRow.innerHTML = `<span class="plan-bank__label">pay to</span><span class="plan-bank__val">${esc(bank)}</span>`;
-        const cp = document.createElement("button"); cp.type = "button"; cp.className = "copy-btn"; cp.setAttribute("aria-label", "Copy payout details"); cp.innerHTML = `<span aria-hidden="true">📋</span>`;
+        bankRow.innerHTML = `<span class="plan-bank__label">${esc(I18N.t("split.planCard.payTo", "pay to"))}</span><span class="plan-bank__val">${esc(bank)}</span>`;
+        const cp = document.createElement("button"); cp.type = "button"; cp.className = "copy-btn"; cp.setAttribute("aria-label", I18N.t("split.planCard.copyAria", "Copy payout details")); cp.innerHTML = `<span aria-hidden="true">📋</span>`;
         cp.addEventListener("click", () => copyText(bank, cp)); bankRow.appendChild(cp);
       } else {
-        bankRow.innerHTML = `<span class="plan-bank__label">pay to</span><span class="plan-bank__val muted">${esc(pname(t.toId))} hasn’t added payout details</span>`;
-        if (payee && canEdit) { const add = document.createElement("button"); add.type = "button"; add.className = "link-btn"; add.textContent = "add"; add.addEventListener("click", () => openBank(payee)); bankRow.appendChild(add); }
+        bankRow.innerHTML = `<span class="plan-bank__label">${esc(I18N.t("split.planCard.payTo", "pay to"))}</span><span class="plan-bank__val muted">${esc(I18N.t("split.planCard.noPayout", "{name} hasn’t added payout details", { name: pname(t.toId) }))}</span>`;
+        if (payee && canEdit) { const add = document.createElement("button"); add.type = "button"; add.className = "link-btn"; add.textContent = I18N.t("split.planCard.add", "add"); add.addEventListener("click", () => openBank(payee)); bankRow.appendChild(add); }
       }
       li.appendChild(bankRow);
 
       const foot = document.createElement("div"); foot.className = "plan-card__foot";
       foot.innerHTML = statusBadge(t.status);
       const acts = document.createElement("span"); acts.className = "plan-actions";
-      const up = document.createElement("button"); up.type = "button"; up.className = "mini-btn"; up.textContent = t.proofRef ? "Replace proof" : "Upload proof";
+      const up = document.createElement("button"); up.type = "button"; up.className = "mini-btn"; up.textContent = t.proofRef ? I18N.t("split.proof.replace", "Replace proof") : I18N.t("split.proof.upload", "Upload proof");
       up.addEventListener("click", () => uploadProof(t.id)); acts.appendChild(up);
-      if (t.proofRef) { const vw = document.createElement("button"); vw.type = "button"; vw.className = "mini-btn"; vw.textContent = "View proof"; vw.addEventListener("click", () => openProof(t.id)); acts.appendChild(vw); }
+      if (t.proofRef) { const vw = document.createElement("button"); vw.type = "button"; vw.className = "mini-btn"; vw.textContent = I18N.t("split.proof.view", "View proof"); vw.addEventListener("click", () => openProof(t.id)); acts.appendChild(vw); }
       if (admin) {
-        if (t.status === "verified") { const un = document.createElement("button"); un.type = "button"; un.className = "mini-btn"; un.textContent = "Unverify"; un.addEventListener("click", () => setVerify(t.id, false)); acts.appendChild(un); }
-        else { const vf = document.createElement("button"); vf.type = "button"; vf.className = "mini-btn verify-btn"; vf.textContent = "Verify"; vf.addEventListener("click", () => setVerify(t.id, true)); acts.appendChild(vf); }
+        if (t.status === "verified") { const un = document.createElement("button"); un.type = "button"; un.className = "mini-btn"; un.textContent = I18N.t("split.proof.unverify", "Unverify"); un.addEventListener("click", () => setVerify(t.id, false)); acts.appendChild(un); }
+        else { const vf = document.createElement("button"); vf.type = "button"; vf.className = "mini-btn verify-btn"; vf.textContent = I18N.t("split.proof.verify", "Verify"); vf.addEventListener("click", () => setVerify(t.id, true)); acts.appendChild(vf); }
       }
       foot.appendChild(acts); li.appendChild(foot);
       el.appendChild(li);
@@ -573,29 +609,29 @@
   }
   async function publishSettlement() {
     const live = settle(compute().net);
-    if (!live.length) { toast("Nothing to settle", { type: "err" }); return; }
-    const ok = await confirmAsk({ title: "Publish settlement plan?", okLabel: "Publish",
-      body: "This freezes the current “who pays whom” as the official plan. Friends pay against it, and recording payments won’t reshuffle it." });
+    if (!live.length) { toast(I18N.t("split.toast.nothingToSettle", "Nothing to settle"), { type: "err" }); return; }
+    const ok = await confirmAsk({ title: I18N.t("split.confirm.publishTitle", "Publish settlement plan?"), okLabel: I18N.t("split.settle.publishShort", "Publish"),
+      body: I18N.t("split.confirm.publishBody", "This freezes the current “who pays whom” as the official plan. Friends pay against it, and recording payments won’t reshuffle it.") });
     if (!ok) return;
     const transfers = live.map((t) => ({ fromId: t.from, toId: t.to, amount: t.amount }));
-    pushDoc(api(`/trips/${tripId}/settlement`, { method: "PUT", body: { transfers } }), { okMsg: "Settlement published" });
+    pushDoc(api(`/trips/${tripId}/settlement`, { method: "PUT", body: { transfers } }), { okMsg: I18N.t("split.toast.published", "Settlement published") });
   }
   async function regenerateSettlement() {
     const live = settle(compute().net);
-    const ok = await confirmAsk({ title: "Re-generate the plan?", danger: true, okLabel: "Re-generate",
-      body: "Recompute who-pays-whom from current balances. Unchanged transfers keep their proof and verified status; changed ones reset." });
+    const ok = await confirmAsk({ title: I18N.t("split.confirm.regenTitle", "Re-generate the plan?"), danger: true, okLabel: I18N.t("split.settle.regenShort", "Re-generate"),
+      body: I18N.t("split.confirm.regenBody", "Recompute who-pays-whom from current balances. Unchanged transfers keep their proof and verified status; changed ones reset.") });
     if (!ok) return;
     const transfers = live.map((t) => ({ fromId: t.from, toId: t.to, amount: t.amount }));
-    pushDoc(api(`/trips/${tripId}/settlement`, { method: "PUT", body: { transfers } }), { okMsg: "Plan re-generated" });
+    pushDoc(api(`/trips/${tripId}/settlement`, { method: "PUT", body: { transfers } }), { okMsg: I18N.t("split.toast.regenerated", "Plan re-generated") });
   }
   async function unpublishSettlement() {
-    const ok = await confirmAsk({ title: "Unpublish the plan?", danger: true, okLabel: "Unpublish",
-      body: "Settlement goes back to live auto-calculation. Uploaded proofs and verifications on the plan are discarded." });
+    const ok = await confirmAsk({ title: I18N.t("split.confirm.unpublishTitle", "Unpublish the plan?"), danger: true, okLabel: I18N.t("split.settle.unpublish", "Unpublish"),
+      body: I18N.t("split.confirm.unpublishBody", "Settlement goes back to live auto-calculation. Uploaded proofs and verifications on the plan are discarded.") });
     if (!ok) return;
-    pushDoc(api(`/trips/${tripId}/settlement`, { method: "DELETE" }), { okMsg: "Plan unpublished" });
+    pushDoc(api(`/trips/${tripId}/settlement`, { method: "DELETE" }), { okMsg: I18N.t("split.toast.unpublished", "Plan unpublished") });
   }
   function setVerify(tid, on) {
-    pushDoc(api(`/trips/${tripId}/settlement/${tid}/${on ? "verify" : "unverify"}`, { method: "POST" }), { okMsg: on ? "Verified ✓" : "Re-opened" });
+    pushDoc(api(`/trips/${tripId}/settlement/${tid}/${on ? "verify" : "unverify"}`, { method: "POST" }), { okMsg: on ? I18N.t("split.toast.verified", "Verified ✓") : I18N.t("split.toast.reopened", "Re-opened") });
   }
   // proof upload (shared hidden input; editor tier)
   let proofTid = null;
@@ -604,12 +640,12 @@
     const file = e.target.files && e.target.files[0]; e.target.value = "";
     if (!file || !proofTid) return;
     const tid = proofTid; proofTid = null;
-    showSpinner("Uploading proof…");
+    showSpinner(I18N.t("split.spinner.uploadingProof", "Uploading proof…"));
     const fd = new FormData(); fd.append("image", file);
-    pushDoc(api(`/trips/${tripId}/settlement/${tid}/proof`, { method: "POST", body: fd }), { okMsg: "Proof uploaded", errMsg: "Upload failed — try a smaller jpg/png" })
+    pushDoc(api(`/trips/${tripId}/settlement/${tid}/proof`, { method: "POST", body: fd }), { okMsg: I18N.t("split.toast.proofUploaded", "Proof uploaded"), errMsg: I18N.t("split.toast.uploadFailed", "Upload failed — try a smaller jpg/png") })
       .catch(() => {}).finally(() => hideSpinner());
   });
-  function showSpinner(msg) { const s = $("#ocrSpinner"); if (!s) return; const sp = s.querySelector("span"); if (sp) sp.textContent = msg || "Working…"; s.hidden = false; }
+  function showSpinner(msg) { const s = $("#ocrSpinner"); if (!s) return; const sp = s.querySelector("span"); if (sp) sp.textContent = msg || I18N.t("split.spinner.working", "Working…"); s.hidden = false; }
   function hideSpinner() { const s = $("#ocrSpinner"); if (s) s.hidden = true; }
   // proof lightbox
   function openProof(tid) {
@@ -629,14 +665,14 @@
   }
   function fallbackCopy(text, done) {
     try { const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand("copy"); ta.remove(); done(); }
-    catch (_) { toast("Couldn't copy", { type: "err" }); }
+    catch (_) { toast(I18N.t("split.toast.copyFailed", "Couldn't copy"), { type: "err" }); }
   }
   // bank/payout dialog (editor tier)
   const bankDialog = $("#bankDialog");
   let bankPid = null;
   function openBank(p) {
     if (!p) return; bankPid = p.id;
-    $("#bankTitle").textContent = "Payout details — " + p.name;
+    $("#bankTitle").textContent = I18N.t("split.bank.titleFor", "Payout details — {name}", { name: p.name });
     $("#bankInput").value = p.bankAccount || "";
     clearErr(bankDialog); openDialog(bankDialog, "#bankInput");
   }
@@ -646,15 +682,15 @@
     ev.preventDefault();
     if (!bankPid) return;
     const v = $("#bankInput").value.trim(); const btn = $("#bankSave"); busy(btn, true);
-    pushDoc(api(`/trips/${tripId}/people/${bankPid}/bank`, { method: "PUT", body: { bankAccount: v } }), { okMsg: "Payout saved" })
+    pushDoc(api(`/trips/${tripId}/people/${bankPid}/bank`, { method: "PUT", body: { bankAccount: v } }), { okMsg: I18N.t("split.toast.payoutSaved", "Payout saved") })
       .then(() => closeDialog(bankDialog)).catch(() => {}).finally(() => busy(btn, false));
   });
 
   function render() {
     if (!doc) return;
-    $("#tripName").textContent = doc.trip.name || "Split the Bill";
+    $("#tripName").textContent = doc.trip.name || I18N.t("split.appTitle", "Split the Bill");
     if ($("#planLink") && tripId) $("#planLink").href = "/trip/?t=" + encodeURIComponent(tripId);
-    document.title = (doc.trip.name ? doc.trip.name + " · " : "") + "Split the Bill";
+    document.title = (doc.trip.name ? doc.trip.name + " · " : "") + I18N.t("split.appTitle", "Split the Bill");
     document.body.classList.toggle("is-admin", admin);
     renderPeopleBar();
     renderShared();
@@ -713,11 +749,11 @@
       okMsg: undefined,
       rollback: () => { doc.adjustments.push(snap); },
     }).then(() => {
-      toast("Adjustment removed", { type: "ok", action: () => readjust(snap), actionLabel: "Undo" });
+      toast(I18N.t("split.toast.adjustRemoved", "Adjustment removed"), { type: "ok", action: () => readjust(snap), actionLabel: I18N.t("common.undo", "Undo") });
     }).catch(() => {});
   }
   function readjust(a) {
-    pushDoc(api(`/trips/${tripId}/adjustments`, { method: "POST", body: { kind: a.kind, fromId: a.fromId, toId: a.toId, amount: a.amount, label: a.label } }), { okMsg: "Restored" });
+    pushDoc(api(`/trips/${tripId}/adjustments`, { method: "POST", body: { kind: a.kind, fromId: a.fromId, toId: a.toId, amount: a.amount, label: a.label } }), { okMsg: I18N.t("split.toast.restored", "Restored") });
   }
 
   // ---------- generic dialog helpers (focus model, validation) ----------
@@ -741,7 +777,7 @@
   function busy(btn, on) {
     if (!btn) return;
     btn.disabled = on; btn.setAttribute("aria-busy", on ? "true" : "false");
-    if (on) { btn.dataset.label = btn.textContent; btn.textContent = "Saving…"; }
+    if (on) { btn.dataset.label = btn.textContent; btn.textContent = I18N.t("common.saving", "Saving…"); }
     else if (btn.dataset.label) { btn.textContent = btn.dataset.label; delete btn.dataset.label; }
   }
   // submit helper: validate() -> if string returned, show error; else run save() (returns promise) and close on success.
@@ -763,10 +799,11 @@
   // themed confirm() replacement -> Promise<bool>
   const confirmDialog = $("#confirmDialog");
   let confirmResolve = null;
-  function confirmAsk({ title, body, okLabel = "Confirm", danger = false }) {
+  function confirmAsk({ title, body, okLabel, danger = false }) {
     return new Promise((resolve) => {
       confirmResolve = resolve;
-      $("#confirmTitle").textContent = title || "Are you sure?";
+      $("#confirmTitle").textContent = title || I18N.t("split.confirm.title", "Are you sure?");
+      okLabel = okLabel || I18N.t("common.confirm", "Confirm");
       $("#confirmBody").innerHTML = body || "";
       const ok = $("#confirmOk"); ok.textContent = okLabel; ok.classList.toggle("danger-solid", danger);
       openDialog(confirmDialog, danger ? "#confirmCancel" : "#confirmOk");
@@ -785,7 +822,7 @@
     const f = (filter || "").trim().toLowerCase();
     const ppl = doc.people.filter((p) => !f || p.name.toLowerCase().includes(f));
     ppl.sort((a, b) => { const sa = pickerSel.has(a.id), sb = pickerSel.has(b.id); if (sa !== sb) return sa ? -1 : 1; return a.name.localeCompare(b.name); });
-    if (!ppl.length) { list.innerHTML = `<p class="empty-hint">No matches.</p>`; }
+    if (!ppl.length) { list.innerHTML = `<p class="empty-hint">${esc(I18N.t("split.picker.noMatches", "No matches."))}</p>`; }
     ppl.forEach((p) => {
       const on = pickerSel.has(p.id);
       const row = document.createElement("button"); row.type = "button"; row.className = "picker-row" + (on ? " is-on" : "");
@@ -796,10 +833,10 @@
       list.appendChild(row);
     });
   }
-  function updatePickerCount() { $("#pickerCount").textContent = pickerSel.size + " selected"; }
+  function updatePickerCount() { $("#pickerCount").textContent = I18N.t("split.picker.selected", "{n} selected", { n: pickerSel.size }); }
   function openPicker({ title, selected, onSave }) {
     pickerSel = new Set(selected || []); pickerOnSave = onSave;
-    $("#pickerTitle").textContent = title || "Who shared this?";
+    $("#pickerTitle").textContent = title || I18N.t("split.picker.title", "Who shared this?");
     $("#pickerSearch").value = "";
     renderPickerList(""); updatePickerCount();
     openDialog(pickerDialog, "#pickerSearch");
@@ -821,7 +858,7 @@
     const w = $("#pnSwatches"); w.innerHTML = "";
     PALETTE.forEach((c, i) => {
       const b = document.createElement("button"); b.type = "button"; b.className = "swatch"; b.setAttribute("role", "radio");
-      b.setAttribute("aria-checked", "false"); b.setAttribute("aria-label", "Colour " + (i + 1));
+      b.setAttribute("aria-checked", "false"); b.setAttribute("aria-label", I18N.t("split.person.colourN", "Colour {n}", { n: i + 1 }));
       b.style.background = c; b.dataset.c = c;
       b.addEventListener("click", () => selectSwatch(c));
       w.appendChild(b);
@@ -830,7 +867,7 @@
   function selectSwatch(c) { pnColor = c; $("#pnSwatches").querySelectorAll(".swatch").forEach((s) => { const on = s.dataset.c === c; s.classList.toggle("is-on", on); s.setAttribute("aria-checked", on ? "true" : "false"); }); }
   function openPerson(p) {
     pnEditing = p ? p.id : null;
-    $("#pnTitle").textContent = p ? "Edit person" : "Add person";
+    $("#pnTitle").textContent = p ? I18N.t("split.person.editTitle", "Edit person") : I18N.t("split.person.addTitle", "Add person");
     $("#pnName").value = p ? p.name : "";
     selectSwatch(p && p.color ? p.color : genColor(doc.people.length));
     $("#pnDelete").hidden = !p;
@@ -840,22 +877,23 @@
   $("#addPersonBtn").addEventListener("click", () => openPerson(null));
   $("#pnCancel").addEventListener("click", () => closeDialog(personDialog));
   wireForm($("#personForm"), personDialog,
-    () => { const name = $("#pnName").value.trim(); if (!name) return { el: "pnErr", msg: "Name is required", focus: "pnName" }; return null; },
+    () => { const name = $("#pnName").value.trim(); if (!name) return { el: "pnErr", msg: I18N.t("split.err.nameRequired", "Name is required"), focus: "pnName" }; return null; },
     () => {
       const body = { name: $("#pnName").value.trim(), color: pnColor };
       return pnEditing
-        ? pushDoc(api(`/trips/${tripId}/people/${pnEditing}`, { method: "PUT", body }), { okMsg: "Saved" })
-        : pushDoc(api(`/trips/${tripId}/people`, { method: "POST", body }), { okMsg: "Person added" });
+        ? pushDoc(api(`/trips/${tripId}/people/${pnEditing}`, { method: "PUT", body }), { okMsg: I18N.t("common.saved", "Saved") })
+        : pushDoc(api(`/trips/${tripId}/people`, { method: "POST", body }), { okMsg: I18N.t("split.toast.personAdded", "Person added") });
     }, "#pnSave");
   $("#pnDelete").addEventListener("click", async () => {
     if (!pnEditing) return;
     const c = compute();
     const onItems = (doc.receipts || []).reduce((n, rc) => n + (rc.items || []).filter((it) => (it.sharedBy || []).includes(pnEditing)).length, 0);
-    const ok = await confirmAsk({ title: "Delete this person?", danger: true, okLabel: "Delete",
-      body: `<b>${esc(pname(pnEditing))}</b> will be removed from all splits${onItems ? ` (${onItems} item${onItems > 1 ? "s" : ""})` : ""}. Their share is redistributed to the others.` });
+    const itemsNote = onItems ? (onItems > 1 ? I18N.t("split.confirm.deletePersonItemsMany", " ({n} items)", { n: onItems }) : I18N.t("split.confirm.deletePersonItemsOne", " ({n} item)", { n: onItems })) : "";
+    const ok = await confirmAsk({ title: I18N.t("split.confirm.deletePersonTitle", "Delete this person?"), danger: true, okLabel: I18N.t("common.delete", "Delete"),
+      body: I18N.t("split.confirm.deletePersonBody", "<b>{name}</b> will be removed from all splits{items}. Their share is redistributed to the others.", { name: esc(pname(pnEditing)), items: itemsNote }) });
     if (!ok) return;
     closeDialog(personDialog);
-    pushDoc(api(`/trips/${tripId}/people/${pnEditing}`, { method: "DELETE" }), { okMsg: "Person removed" });
+    pushDoc(api(`/trips/${tripId}/people/${pnEditing}`, { method: "DELETE" }), { okMsg: I18N.t("split.toast.personRemoved", "Person removed") });
   });
 
   // ---------- receipt dialog (manual + OCR draft) ----------
@@ -863,7 +901,7 @@
   let rcEditing = null, rcItems = [];
   function payerOptions(sel, selected) {
     sel.innerHTML = "";
-    const none = document.createElement("option"); none.value = ""; none.textContent = "— nobody —"; sel.appendChild(none);
+    const none = document.createElement("option"); none.value = ""; none.textContent = I18N.t("split.receipt.nobody", "— nobody —"); sel.appendChild(none);
     doc.people.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach((p) => { const o = document.createElement("option"); o.value = p.id; o.textContent = p.name; if (p.id === selected) o.selected = true; sel.appendChild(o); });
   }
   function addRcItem(focus) {
@@ -874,10 +912,10 @@
     const w = $("#rcItems");
     const row = document.createElement("div"); row.className = "rc-item";
     row.innerHTML = `
-      <input class="ri-name" aria-label="Item name" placeholder="Item" value="${esc(it.name || "")}" />
-      <input class="ri-qty" type="number" min="1" step="1" inputmode="numeric" aria-label="Quantity" value="${it.quantity || 1}" />
-      <input class="ri-total" type="number" min="0" step="1" inputmode="numeric" aria-label="Line total" value="${it.lineTotal || 0}" />
-      <button type="button" class="ri-del" aria-label="Remove item"><span aria-hidden="true">✕</span></button>`;
+      <input class="ri-name" aria-label="${esc(I18N.t("split.rcItem.nameAria", "Item name"))}" placeholder="${esc(I18N.t("split.rcItem.namePh", "Item"))}" value="${esc(it.name || "")}" />
+      <input class="ri-qty" type="number" min="1" step="1" inputmode="numeric" aria-label="${esc(I18N.t("split.rcItem.qtyAria", "Quantity"))}" value="${it.quantity || 1}" />
+      <input class="ri-total" type="number" min="0" step="1" inputmode="numeric" aria-label="${esc(I18N.t("split.rcItem.totalAria", "Line total"))}" value="${it.lineTotal || 0}" />
+      <button type="button" class="ri-del" aria-label="${esc(I18N.t("split.rcItem.removeAria", "Remove item"))}"><span aria-hidden="true">✕</span></button>`;
     row.querySelector(".ri-name").addEventListener("input", (e) => it.name = e.target.value);
     row.querySelector(".ri-qty").addEventListener("input", (e) => it.quantity = parseInt(e.target.value, 10) || 1);
     row.querySelector(".ri-total").addEventListener("input", (e) => it.lineTotal = parseInt(e.target.value, 10) || 0);
@@ -888,7 +926,7 @@
   function renderRcItems() { const w = $("#rcItems"); w.innerHTML = ""; rcItems.forEach((it, i) => appendRcRow(it, i)); }
   function openReceipt(rc, draftWarnings) {
     rcEditing = rc && rc.id ? rc.id : null;
-    $("#rcTitle").textContent = rcEditing ? "Edit receipt" : (rc ? "Confirm scanned receipt" : "Add receipt");
+    $("#rcTitle").textContent = rcEditing ? I18N.t("split.receipt.editTitle", "Edit receipt") : (rc ? I18N.t("split.receipt.confirmTitle", "Confirm scanned receipt") : I18N.t("split.receipt.addTitle", "Add receipt"));
     $("#rcName").value = rc ? (rc.title || "") : "";
     $("#rcDate").value = rc && rc.date ? rc.date : "";
     $("#rcGrand").value = rc && rc.grandTotal ? rc.grandTotal : 0;
@@ -907,22 +945,22 @@
   $("#rcAddItem").addEventListener("click", () => addRcItem(true));
   $("#rcCancel").addEventListener("click", () => closeDialog(receiptDialog));
   wireForm($("#receiptForm"), receiptDialog,
-    () => { if (!$("#rcName").value.trim()) return { el: "rcErr", msg: "Title is required", focus: "rcName" };
-            if (!rcItems.some((it) => (it.name || "").trim() || it.lineTotal)) return { el: "rcErr", msg: "Add at least one item" }; return null; },
+    () => { if (!$("#rcName").value.trim()) return { el: "rcErr", msg: I18N.t("split.err.titleRequired", "Title is required"), focus: "rcName" };
+            if (!rcItems.some((it) => (it.name || "").trim() || it.lineTotal)) return { el: "rcErr", msg: I18N.t("split.err.addOneItem", "Add at least one item") }; return null; },
     () => {
       const items = rcItems.filter((it) => (it.name || "").trim() || it.lineTotal)
         .map((it) => ({ id: it.id, name: (it.name || "").trim() || "Item", quantity: it.quantity || 1, unitPrice: it.unitPrice || (it.quantity ? Math.round(it.lineTotal / it.quantity) : it.lineTotal), lineTotal: it.lineTotal || 0, sharedBy: it.sharedBy || [] }));
       const body = { title: $("#rcName").value.trim() || "Receipt", date: $("#rcDate").value || "", payerId: $("#rcPayer").value, items, grandTotal: parseInt($("#rcGrand").value, 10) || 0 };
       return rcEditing
-        ? pushDoc(api(`/trips/${tripId}/receipts/${rcEditing}`, { method: "PUT", body }), { okMsg: "Saved" })
-        : pushDoc(api(`/trips/${tripId}/receipts`, { method: "POST", body }), { okMsg: "Receipt added" });
+        ? pushDoc(api(`/trips/${tripId}/receipts/${rcEditing}`, { method: "PUT", body }), { okMsg: I18N.t("common.saved", "Saved") })
+        : pushDoc(api(`/trips/${tripId}/receipts`, { method: "POST", body }), { okMsg: I18N.t("split.toast.receiptAdded", "Receipt added") });
     }, "#rcSave");
   $("#rcDelete").addEventListener("click", async () => {
     if (!rcEditing) return;
-    const ok = await confirmAsk({ title: "Delete this receipt?", danger: true, okLabel: "Delete", body: "This removes the receipt and its items from the split." });
+    const ok = await confirmAsk({ title: I18N.t("split.confirm.deleteReceiptTitle", "Delete this receipt?"), danger: true, okLabel: I18N.t("common.delete", "Delete"), body: I18N.t("split.confirm.deleteReceiptBody", "This removes the receipt and its items from the split.") });
     if (!ok) return;
     closeDialog(receiptDialog);
-    pushDoc(api(`/trips/${tripId}/receipts/${rcEditing}`, { method: "DELETE" }), { okMsg: "Receipt deleted" });
+    pushDoc(api(`/trips/${tripId}/receipts/${rcEditing}`, { method: "DELETE" }), { okMsg: I18N.t("split.toast.receiptDeleted", "Receipt deleted") });
   });
 
   // ---------- expense dialog ----------
@@ -946,11 +984,11 @@
     const el = $("#exSummary"); if (!el) return;
     const ids = Object.keys(exShares).filter((id) => personById[id]);
     const amt = parseInt($("#exAmount").value, 10) || 0;
-    if (!ids.length) { el.className = "ex-summary warn-text"; el.textContent = "Pick at least one person."; return; }
-    if (exMode === "EVENLY") { el.className = "ex-summary"; el.textContent = `${money(amt / ids.length)} each · ${ids.length} ${ids.length === 1 ? "person" : "people"}`; return; }
-    if (exMode === "BY_SHARES") { const t = ids.reduce((s, id) => s + (exShares[id] || 0), 0); el.className = "ex-summary" + (t > 0 ? "" : " warn-text"); el.textContent = t > 0 ? `${t} shares total` : "Shares must be > 0"; return; }
-    if (exMode === "BY_PERCENTAGE") { const t = ids.reduce((s, id) => s + (exShares[id] || 0), 0); const ok = Math.abs(t - 100) < 0.5; el.className = "ex-summary" + (ok ? " ok-text" : " warn-text"); el.textContent = ok ? `Σ 100% ✓` : `Σ ${t}% — ${t < 100 ? (100 - t) + "% unallocated" : (t - 100) + "% over"}`; return; }
-    if (exMode === "BY_AMOUNT") { const t = ids.reduce((s, id) => s + (exShares[id] || 0), 0); const ok = t === amt; el.className = "ex-summary" + (ok ? " ok-text" : " warn-text"); el.textContent = `Σ ${money(t)} of ${money(amt)}` + (ok ? " ✓" : ""); return; }
+    if (!ids.length) { el.className = "ex-summary warn-text"; el.textContent = I18N.t("split.ex.pickOne", "Pick at least one person."); return; }
+    if (exMode === "EVENLY") { el.className = "ex-summary"; el.textContent = I18N.t("split.ex.evenlySummary", "{amount} each · {n} {who}", { amount: money(amt / ids.length), n: ids.length, who: ids.length === 1 ? I18N.t("split.person", "person") : I18N.t("split.people.word", "people") }); return; }
+    if (exMode === "BY_SHARES") { const t = ids.reduce((s, id) => s + (exShares[id] || 0), 0); el.className = "ex-summary" + (t > 0 ? "" : " warn-text"); el.textContent = t > 0 ? I18N.t("split.ex.sharesTotal", "{n} shares total", { n: t }) : I18N.t("split.ex.sharesPositive", "Shares must be > 0"); return; }
+    if (exMode === "BY_PERCENTAGE") { const t = ids.reduce((s, id) => s + (exShares[id] || 0), 0); const ok = Math.abs(t - 100) < 0.5; el.className = "ex-summary" + (ok ? " ok-text" : " warn-text"); el.textContent = ok ? I18N.t("split.ex.pctOk", "Σ 100% ✓") : I18N.t("split.ex.pctOff", "Σ {t}% — {detail}", { t, detail: t < 100 ? I18N.t("split.ex.pctUnder", "{x}% unallocated", { x: 100 - t }) : I18N.t("split.ex.pctOver", "{x}% over", { x: t - 100 }) }); return; }
+    if (exMode === "BY_AMOUNT") { const t = ids.reduce((s, id) => s + (exShares[id] || 0), 0); const ok = t === amt; el.className = "ex-summary" + (ok ? " ok-text" : " warn-text"); el.textContent = I18N.t("split.ex.amtSummary", "Σ {sum} of {total}", { sum: money(t), total: money(amt) }) + (ok ? " ✓" : ""); return; }
   }
   function distributeEvenly() {
     const ids = Object.keys(exShares).filter((id) => personById[id]); if (!ids.length) return;
@@ -962,18 +1000,18 @@
   }
   function renderExParts() {
     const w = $("#exParts"); w.innerHTML = "";
-    $("#exPartLabel").textContent = exMode === "EVENLY" ? "Shared by" : exMode === "BY_PERCENTAGE" ? "Percent each" : exMode === "BY_AMOUNT" ? "Amount each" : "Shares each";
+    $("#exPartLabel").textContent = exMode === "EVENLY" ? I18N.t("split.expense.sharedBy", "Shared by") : exMode === "BY_PERCENTAGE" ? I18N.t("split.ex.percentEach", "Percent each") : exMode === "BY_AMOUNT" ? I18N.t("split.ex.amountEach", "Amount each") : I18N.t("split.ex.sharesEach", "Shares each");
     w.classList.toggle("ex-parts--col", exMode !== "EVENLY" || bigMode());
     doc.people.forEach((p) => {
       const on = exShares[p.id] !== undefined;
       const row = document.createElement("div"); row.className = "ex-part" + (on ? " is-on" : "");
       const chip = document.createElement("button"); chip.type = "button"; chip.className = "chip"; chip.style.setProperty("--c", personColor[p.id]);
-      chip.setAttribute("aria-pressed", on ? "true" : "false"); chip.setAttribute("aria-label", (on ? "Sharing: " : "Not sharing: ") + p.name); chip.textContent = p.name;
+      chip.setAttribute("aria-pressed", on ? "true" : "false"); chip.setAttribute("aria-label", (on ? I18N.t("split.chip.sharing", "Sharing: ") : I18N.t("split.chip.notSharing", "Not sharing: ")) + p.name); chip.textContent = p.name;
       chip.addEventListener("click", () => { if (exShares[p.id] !== undefined) delete exShares[p.id]; else exShares[p.id] = exMode === "EVENLY" ? 1 : (exMode === "BY_PERCENTAGE" ? 0 : 0); renderExParts(); });
       row.appendChild(chip);
       if (on && exMode !== "EVENLY") {
         const inp = document.createElement("input"); inp.type = "number"; inp.min = "0"; inp.step = "1"; inp.inputMode = "numeric"; inp.className = "ex-share";
-        inp.setAttribute("aria-label", p.name + " " + (exMode === "BY_PERCENTAGE" ? "percent" : exMode === "BY_AMOUNT" ? "amount" : "shares")); inp.value = exShares[p.id] || 0;
+        inp.setAttribute("aria-label", p.name + " " + (exMode === "BY_PERCENTAGE" ? I18N.t("split.ex.percentWord", "percent") : exMode === "BY_AMOUNT" ? I18N.t("split.ex.amountWord", "amount") : I18N.t("split.ex.sharesWord", "shares"))); inp.value = exShares[p.id] || 0;
         inp.addEventListener("input", (e) => { exShares[p.id] = parseFloat(e.target.value) || 0; exSummary(); });
         row.appendChild(inp);
       }
@@ -983,7 +1021,7 @@
   }
   function openExpense(e, prefill) {
     exEditing = e ? e.id : null;
-    $("#exTitle").textContent = e ? "Edit shared cost" : "Add shared cost";
+    $("#exTitle").textContent = e ? I18N.t("split.expense.editTitle", "Edit shared cost") : I18N.t("split.expense.addTitle", "Add shared cost");
     $("#exName").value = e ? e.title : (prefill && prefill.title || "");
     $("#exAmount").value = e ? e.amount : (prefill && prefill.amount || "");
     payerOptions($("#exPayer"), e ? e.payerId : "");
@@ -1001,27 +1039,27 @@
   $("#exCancel").addEventListener("click", () => closeDialog(expenseDialog));
   wireForm($("#expenseForm"), expenseDialog,
     () => {
-      if (!$("#exName").value.trim()) return { el: "exErr", msg: "Title is required", focus: "exName" };
-      const amt = parseInt($("#exAmount").value, 10) || 0; if (amt <= 0) return { el: "exErr", msg: "Amount must be more than 0", focus: "exAmount" };
-      const ids = Object.keys(exShares).filter((id) => personById[id]); if (!ids.length) return { el: "exErr", msg: "Pick at least one person" };
-      if (exMode === "BY_PERCENTAGE") { const t = ids.reduce((s, id) => s + (exShares[id] || 0), 0); if (Math.abs(t - 100) >= 0.5) return { el: "exErr", msg: `Percentages must total 100% (now ${t}%)` }; }
-      if (exMode === "BY_AMOUNT") { const t = ids.reduce((s, id) => s + (exShares[id] || 0), 0); if (t !== amt) return { el: "exErr", msg: `Amounts must total ${money(amt)} (now ${money(t)})` }; }
-      if (exMode === "BY_SHARES") { const t = ids.reduce((s, id) => s + (exShares[id] || 0), 0); if (t <= 0) return { el: "exErr", msg: "Shares must be greater than 0" }; }
+      if (!$("#exName").value.trim()) return { el: "exErr", msg: I18N.t("split.err.titleRequired", "Title is required"), focus: "exName" };
+      const amt = parseInt($("#exAmount").value, 10) || 0; if (amt <= 0) return { el: "exErr", msg: I18N.t("split.err.amountPositive", "Amount must be more than 0"), focus: "exAmount" };
+      const ids = Object.keys(exShares).filter((id) => personById[id]); if (!ids.length) return { el: "exErr", msg: I18N.t("split.err.pickOne", "Pick at least one person") };
+      if (exMode === "BY_PERCENTAGE") { const t = ids.reduce((s, id) => s + (exShares[id] || 0), 0); if (Math.abs(t - 100) >= 0.5) return { el: "exErr", msg: I18N.t("split.err.pctTotal", "Percentages must total 100% (now {t}%)", { t }) }; }
+      if (exMode === "BY_AMOUNT") { const t = ids.reduce((s, id) => s + (exShares[id] || 0), 0); if (t !== amt) return { el: "exErr", msg: I18N.t("split.err.amtTotal", "Amounts must total {total} (now {sum})", { total: money(amt), sum: money(t) }) }; }
+      if (exMode === "BY_SHARES") { const t = ids.reduce((s, id) => s + (exShares[id] || 0), 0); if (t <= 0) return { el: "exErr", msg: I18N.t("split.err.sharesPositive", "Shares must be greater than 0") }; }
       return null;
     },
     () => {
       const shares = {}; Object.keys(exShares).forEach((id) => { if (personById[id]) shares[id] = exMode === "EVENLY" ? 1 : (exShares[id] || 0); });
       const body = { title: $("#exName").value.trim() || "Shared cost", amount: parseInt($("#exAmount").value, 10) || 0, payerId: $("#exPayer").value, splitMode: exMode, shares };
       return exEditing
-        ? pushDoc(api(`/trips/${tripId}/expenses/${exEditing}`, { method: "PUT", body }), { okMsg: "Saved" })
-        : pushDoc(api(`/trips/${tripId}/expenses`, { method: "POST", body }), { okMsg: "Cost added" });
+        ? pushDoc(api(`/trips/${tripId}/expenses/${exEditing}`, { method: "PUT", body }), { okMsg: I18N.t("common.saved", "Saved") })
+        : pushDoc(api(`/trips/${tripId}/expenses`, { method: "POST", body }), { okMsg: I18N.t("split.toast.costAdded", "Cost added") });
     }, "#exSave");
   $("#exDelete").addEventListener("click", async () => {
     if (!exEditing) return;
-    const ok = await confirmAsk({ title: "Delete this shared cost?", danger: true, okLabel: "Delete", body: "This removes the cost from the split." });
+    const ok = await confirmAsk({ title: I18N.t("split.confirm.deleteCostTitle", "Delete this shared cost?"), danger: true, okLabel: I18N.t("common.delete", "Delete"), body: I18N.t("split.confirm.deleteCostBody", "This removes the cost from the split.") });
     if (!ok) return;
     closeDialog(expenseDialog);
-    pushDoc(api(`/trips/${tripId}/expenses/${exEditing}`, { method: "DELETE" }), { okMsg: "Cost deleted" });
+    pushDoc(api(`/trips/${tripId}/expenses/${exEditing}`, { method: "DELETE" }), { okMsg: I18N.t("split.toast.costDeleted", "Cost deleted") });
   });
 
   // ---------- adjustment dialog ----------
@@ -1032,10 +1070,10 @@
     doc.people.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach((p) => { const o = document.createElement("option"); o.value = p.id; o.textContent = p.name; sel.appendChild(o); });
     if (idx != null && sel.options[idx]) sel.selectedIndex = idx;
   }
-  function setAdjKind(k) { adjKind = k; document.querySelectorAll("#adjKind .seg__btn").forEach((b) => { const on = b.dataset.kind === k; b.classList.toggle("is-on", on); b.setAttribute("aria-checked", on ? "true" : "false"); }); $("#adjFromLabel").textContent = k === "payment" ? "Who paid" : "Who owes"; }
+  function setAdjKind(k) { adjKind = k; document.querySelectorAll("#adjKind .seg__btn").forEach((b) => { const on = b.dataset.kind === k; b.classList.toggle("is-on", on); b.setAttribute("aria-checked", on ? "true" : "false"); }); $("#adjFromLabel").textContent = k === "payment" ? I18N.t("split.adjust.whoPaid", "Who paid") : I18N.t("split.adjust.whoOwes", "Who owes"); }
   document.querySelectorAll("#adjKind .seg__btn").forEach((b) => b.addEventListener("click", () => setAdjKind(b.dataset.kind)));
   $("#addAdjustBtn").addEventListener("click", () => {
-    if (doc.people.length < 2) { toast("Add at least two people first", { type: "err" }); return; }
+    if (doc.people.length < 2) { toast(I18N.t("split.toast.needTwoPeople", "Add at least two people first"), { type: "err" }); return; }
     fillPeopleSelect($("#adjFrom"), 0); fillPeopleSelect($("#adjTo"), Math.min(1, doc.people.length - 1));
     $("#adjAmount").value = ""; $("#adjLabel").value = ""; setAdjKind("debt");
     clearErr(adjustDialog);
@@ -1046,14 +1084,14 @@
     () => {
       const fromId = $("#adjFrom").value, toId = $("#adjTo").value;
       const amount = Math.max(0, parseInt($("#adjAmount").value, 10) || 0);
-      if (!fromId || !toId) return { el: "adjErr", msg: "Pick both people" };
-      if (fromId === toId) return { el: "adjErr", msg: "Pick two different people" };
-      if (amount <= 0) return { el: "adjErr", msg: "Amount must be more than 0", focus: "adjAmount" };
+      if (!fromId || !toId) return { el: "adjErr", msg: I18N.t("split.err.pickBoth", "Pick both people") };
+      if (fromId === toId) return { el: "adjErr", msg: I18N.t("split.err.pickDifferent", "Pick two different people") };
+      if (amount <= 0) return { el: "adjErr", msg: I18N.t("split.err.amountPositive", "Amount must be more than 0"), focus: "adjAmount" };
       return null;
     },
     () => {
       const body = { kind: adjKind, fromId: $("#adjFrom").value, toId: $("#adjTo").value, amount: Math.max(0, parseInt($("#adjAmount").value, 10) || 0), label: $("#adjLabel").value.trim() };
-      return pushDoc(api(`/trips/${tripId}/adjustments`, { method: "POST", body }), { okMsg: "Adjustment added" });
+      return pushDoc(api(`/trips/${tripId}/adjustments`, { method: "POST", body }), { okMsg: I18N.t("split.toast.adjustAdded", "Adjustment added") });
     }, "#adjSave");
 
   // ---------- OCR ----------
@@ -1069,11 +1107,11 @@
       openReceipt({ title: res.draft.title, date: res.draft.date, payerId: "", items: res.draft.items, grandTotal: res.draft.grandTotal }, res.warnings);
     } catch (err) {
       $("#ocrSpinner").hidden = true;
-      if (err.code === 503) toast("Photo scanning isn't set up on the server yet.", { type: "err" });
-      else if (err.code === 422) toast("Couldn't read a receipt — try a clearer photo or add it manually.", { type: "err" });
-      else if (err.code === 429) toast("Too many uploads — try again in a bit.", { type: "err" });
-      else if (err.code === 401) { toast("Enter the passcode to upload.", { type: "err" }); lock(); }
-      else toast("Scan failed: " + (err.body && err.body.error ? err.body.error : err.message), { type: "err" });
+      if (err.code === 503) toast(I18N.t("split.ocr.notSetUp", "Photo scanning isn't set up on the server yet."), { type: "err" });
+      else if (err.code === 422) toast(I18N.t("split.ocr.cantRead", "Couldn't read a receipt — try a clearer photo or add it manually."), { type: "err" });
+      else if (err.code === 429) toast(I18N.t("split.ocr.tooMany", "Too many uploads — try again in a bit."), { type: "err" });
+      else if (err.code === 401) { toast(I18N.t("split.ocr.needPasscode", "Enter the passcode to upload."), { type: "err" }); lock(); }
+      else toast(I18N.t("split.ocr.scanFailed", "Scan failed: {error}", { error: (err.body && err.body.error ? err.body.error : err.message) }), { type: "err" });
     }
   });
 
@@ -1087,10 +1125,10 @@
     try {
       await api("/login", { method: "POST", body: { password: $("#loginPassword").value } });
       closeDialog(loginDialog);
-      admin = true; applyAdminUI(); toast("Logged in", { type: "ok" });
+      admin = true; applyAdminUI(); toast(I18N.t("split.toast.loggedIn", "Logged in"), { type: "ok" });
       await refreshTrip();
     } catch (err) {
-      showErr($("#loginErr"), err.code === 429 ? "Too many attempts — wait a bit." : "Wrong password");
+      showErr($("#loginErr"), err.code === 429 ? I18N.t("split.err.tooManyAttempts", "Too many attempts — wait a bit.") : I18N.t("split.err.wrongPassword", "Wrong password"));
       const card = loginDialog.querySelector(".dialog__form"); card.classList.remove("shake"); void card.offsetWidth; card.classList.add("shake");
       $("#loginPassword").select();
     } finally { busy(btn, false); }
@@ -1098,7 +1136,7 @@
   loginDialog.addEventListener("cancel", (ev) => { ev.preventDefault(); closeDialog(loginDialog); });
   $("#logoutBtn").addEventListener("click", async () => {
     try { await api("/logout", { method: "POST" }); } catch (_) {}
-    admin = false; applyAdminUI(); render(); toast("Logged out", { type: "ok" });
+    admin = false; applyAdminUI(); render(); toast(I18N.t("split.toast.loggedOut", "Logged out"), { type: "ok" });
   });
 
   function applyAdminUI() {
@@ -1115,47 +1153,47 @@
   function allOrExcept(ids) {
     const all = doc.people.map((p) => p.id);
     const set = new Set(ids);
-    if (ids.length === all.length && all.every((id) => set.has(id))) return "Everyone";
+    if (ids.length === all.length && all.every((id) => set.has(id))) return I18N.t("split.report.everyone", "Everyone");
     const missing = all.filter((id) => !set.has(id));
-    if (ids.length && missing.length && missing.length <= 2) return "Everyone except " + missing.map(pname).join(", ");
+    if (ids.length && missing.length && missing.length <= 2) return I18N.t("split.report.everyoneExcept", "Everyone except {names}", { names: missing.map(pname).join(", ") });
     return ids.map(pname).join(", ");
   }
   function buildReport() {
     const c = compute(); const transfers = settle(c.net);
     const stamp = new Date().toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
     const settleRows = transfers.length
-      ? transfers.map((t) => `<tr><td>${esc(pname(t.from))}</td><td class="arrow">pays</td><td>${esc(pname(t.to))}</td><td class="num">${money(t.amount)}</td></tr>`).join("")
-      : `<tr><td colspan="4" class="center">All square — nothing to transfer.</td></tr>`;
+      ? transfers.map((t) => `<tr><td>${esc(pname(t.from))}</td><td class="arrow">${esc(I18N.t("split.pays", "pays"))}</td><td>${esc(pname(t.to))}</td><td class="num">${money(t.amount)}</td></tr>`).join("")
+      : `<tr><td colspan="4" class="center">${esc(I18N.t("split.report.allSquare", "All square — nothing to transfer."))}</td></tr>`;
     const personRows = doc.people.map((p) => {
-      const n = c.net[p.id]; const verdict = n > 0.5 ? "gets back " + money(n) : n < -0.5 ? "pays " + money(-n) : "settled";
+      const n = c.net[p.id]; const verdict = n > 0.5 ? I18N.t("split.report.getsBack", "gets back {amount}", { amount: money(n) }) : n < -0.5 ? I18N.t("split.report.pays", "pays {amount}", { amount: money(-n) }) : I18N.t("split.net.settled", "settled");
       return `<tr><td>${esc(p.name)}</td><td class="num">${money(c.consumed[p.id])}</td><td class="num">${money(c.paid[p.id])}</td><td class="num ${n < -0.5 ? "neg" : n > 0.5 ? "pos" : ""}">${money(n)}</td><td>${esc(verdict)}</td></tr>`;
     }).join("");
     const expHtml = doc.expenses.map((e) => {
       const keys = Object.keys(e.shares || {}).filter((id) => personById[id]);
-      return `<tr><td>${esc(e.title)}</td><td class="num">${money(e.amount)}</td><td>paid by ${esc(pname(e.payerId))}</td><td>${esc(allOrExcept(keys) || "—")}</td></tr>`;
+      return `<tr><td>${esc(e.title)}</td><td class="num">${money(e.amount)}</td><td>${esc(I18N.t("split.paidBy", "paid by"))} ${esc(pname(e.payerId))}</td><td>${esc(allOrExcept(keys) || "—")}</td></tr>`;
     }).join("");
     const rcHtml = doc.receipts.slice().sort((a, b) => dateSortKey(a).localeCompare(dateSortKey(b))).map((rc) => {
       const grand = rc.grandTotal || sumItems(rc.items); const ratio = grand / (sumItems(rc.items) || 1);
       const rows = (rc.items || []).map((it) => {
         const sh = (it.sharedBy || []).filter((id) => personById[id]);
         const per = sh.length ? ((it.lineTotal || 0) * ratio) / sh.length : 0;
-        return `<tr><td>${esc(it.name)}${it.quantity > 1 ? " ×" + it.quantity : ""}</td><td class="num">${money(it.lineTotal || 0)}</td><td>${esc(sh.length ? allOrExcept(sh) : "— unassigned —")}</td><td class="num">${sh.length ? money(per) + " ea" : ""}</td></tr>`;
+        return `<tr><td>${esc(it.name)}${it.quantity > 1 ? " ×" + it.quantity : ""}</td><td class="num">${money(it.lineTotal || 0)}</td><td>${esc(sh.length ? allOrExcept(sh) : I18N.t("split.report.unassigned", "— unassigned —"))}</td><td class="num">${sh.length ? esc(I18N.t("split.report.ea", "{amount} ea", { amount: money(per) })) : ""}</td></tr>`;
       }).join("");
-      return `<div class="rep-group"><div class="rep-group__head"><b>${esc(rc.title)}</b><span>${esc([fmtWhen(rc.date, rc.time), "paid by " + pname(rc.payerId), money(grand)].filter(Boolean).join(" · "))}</span></div><table class="rep-table"><tbody>${rows}</tbody></table></div>`;
+      return `<div class="rep-group"><div class="rep-group__head"><b>${esc(rc.title)}</b><span>${esc([fmtWhen(rc.date, rc.time), I18N.t("split.report.paidByName", "paid by {name}", { name: pname(rc.payerId) }), money(grand)].filter(Boolean).join(" · "))}</span></div><table class="rep-table"><tbody>${rows}</tbody></table></div>`;
     }).join("");
     const adjHtml = doc.adjustments.length
-      ? `<table class="rep-table"><tbody>${doc.adjustments.map((a) => `<tr><td>${esc(pname(a.fromId))} ${a.kind === "payment" ? "already paid" : "owes"} ${esc(pname(a.toId))}${a.label ? " (" + esc(a.label) + ")" : ""}</td><td class="num">${money(a.amount)}</td></tr>`).join("")}</tbody></table>`
-      : "<p class='muted'>None.</p>";
-    const unassigned = c.unassignedCount ? `<p class="warn">⚠ ${c.unassignedCount} line(s) (${money(c.unassignedTotal)}) still unassigned — provisional.</p>` : "";
+      ? `<table class="rep-table"><tbody>${doc.adjustments.map((a) => `<tr><td>${esc(I18N.t(a.kind === "payment" ? "split.report.adjPaid" : "split.report.adjOwes", a.kind === "payment" ? "{from} already paid {to}" : "{from} owes {to}", { from: pname(a.fromId), to: pname(a.toId) }))}${a.label ? " (" + esc(a.label) + ")" : ""}</td><td class="num">${money(a.amount)}</td></tr>`).join("")}</tbody></table>`
+      : `<p class='muted'>${esc(I18N.t("split.report.none", "None."))}</p>`;
+    const unassigned = c.unassignedCount ? `<p class="warn">⚠ ${esc(I18N.t("split.report.unassignedWarn", "{n} line(s) ({amount}) still unassigned — provisional.", { n: c.unassignedCount, amount: money(c.unassignedTotal) }))}</p>` : "";
     $("#report").innerHTML = `
-      <div class="rep-head"><h1>${esc(doc.trip.name || "Split the Bill")}</h1>
-        <div class="rep-meta">Generated ${stamp} · ${c.assignedLines}/${c.totalLines} lines assigned</div></div>
+      <div class="rep-head"><h1>${esc(doc.trip.name || I18N.t("split.appTitle", "Split the Bill"))}</h1>
+        <div class="rep-meta">${esc(I18N.t("split.report.generated", "Generated {stamp} · {done}/{total} lines assigned", { stamp, done: c.assignedLines, total: c.totalLines }))}</div></div>
       ${unassigned}
-      <h2>Who pays whom</h2><table class="rep-table rep-settle"><tbody>${settleRows}</tbody></table>
-      <h2>Per person</h2><table class="rep-table"><thead><tr><th>Person</th><th class="num">Consumed</th><th class="num">Paid</th><th class="num">Net</th><th>Result</th></tr></thead><tbody>${personRows}</tbody></table>
-      <h2>Manual adjustments</h2>${adjHtml}
-      <h2>Shared costs</h2><table class="rep-table"><tbody>${expHtml || "<tr><td class='muted'>None.</td></tr>"}</tbody></table>
-      <h2>Receipts</h2>${rcHtml || "<p class='muted'>None.</p>"}`;
+      <h2>${esc(I18N.t("split.report.whoPaysWhom", "Who pays whom"))}</h2><table class="rep-table rep-settle"><tbody>${settleRows}</tbody></table>
+      <h2>${esc(I18N.t("split.report.perPerson", "Per person"))}</h2><table class="rep-table"><thead><tr><th>${esc(I18N.t("split.report.thPerson", "Person"))}</th><th class="num">${esc(I18N.t("split.report.thConsumed", "Consumed"))}</th><th class="num">${esc(I18N.t("split.report.thPaid", "Paid"))}</th><th class="num">${esc(I18N.t("split.report.thNet", "Net"))}</th><th>${esc(I18N.t("split.report.thResult", "Result"))}</th></tr></thead><tbody>${personRows}</tbody></table>
+      <h2>${esc(I18N.t("split.report.hAdjustments", "Manual adjustments"))}</h2>${adjHtml}
+      <h2>${esc(I18N.t("split.report.hSharedCosts", "Shared costs"))}</h2><table class="rep-table"><tbody>${expHtml || `<tr><td class='muted'>${esc(I18N.t("split.report.none", "None."))}</td></tr>`}</tbody></table>
+      <h2>${esc(I18N.t("split.report.hReceipts", "Receipts"))}</h2>${rcHtml || `<p class='muted'>${esc(I18N.t("split.report.none", "None."))}</p>`}`;
   }
   $("#exportBtn").addEventListener("click", () => { if (!doc) return; buildReport(); window.print(); });
 
@@ -1213,7 +1251,7 @@
     if (inflight > 0 || document.querySelector("dialog[open]") || (sheetDragging)) return;
     const d = pendingDoc; pendingDoc = null;
     const y = window.scrollY; adoptDoc(d); render(); window.scrollTo(0, y);
-    toast("Updated — refreshed", { type: "ok", ms: 1800 });
+    toast(I18N.t("split.toast.updated", "Updated — refreshed"), { type: "ok", ms: 1800 });
   }
   function pollApply(d) {
     if (!d || d.rev === (doc && doc.rev)) { setSync("live"); return; }
@@ -1223,7 +1261,7 @@
 
   // ---------- boot / polling ----------
   async function refreshTrip() {
-    try { const d = await api("/trips/" + tripId); adoptDoc(d); render(); setSync("live"); } catch (e) { if (e.code === 401) lock("Enter passcode"); else setSync("offline"); }
+    try { const d = await api("/trips/" + tripId); adoptDoc(d); render(); setSync("live"); } catch (e) { if (e.code === 401) lock(I18N.t("split.lock.enterPasscode", "Enter passcode")); else setSync("offline"); }
   }
   async function tryLoad() {
     if (!tripId) return resolveTrip();
@@ -1232,9 +1270,9 @@
       try { localStorage.setItem(PASS_KEY, pass); } catch (_) {}
       unlock(); adoptDoc(d); render(); setSync("live"); startPolling();
     } catch (e) {
-      if (e.code === 401) lock("Wrong passcode");
+      if (e.code === 401) lock(I18N.t("split.lock.wrongPasscode", "Wrong passcode"));
       else if (doc) { setSync("offline"); startPolling(); }
-      else $("#receipts").innerHTML = `<p class="empty-hint">Couldn't load this trip (${esc(String(e.code || e.message))}).</p>`;
+      else $("#receipts").innerHTML = `<p class="empty-hint">${esc(I18N.t("split.err.loadFailed", "Couldn't load this trip ({code}).", { code: String(e.code || e.message) }))}</p>`;
     }
   }
   async function resolveTrip() {
@@ -1249,8 +1287,14 @@
     pollTimer = setInterval(() => {
       if (document.hidden) return;
       api("/trips/" + tripId).then((d) => pollApply(d))
-        .catch((e) => { if (e.code === 401) lock("Enter passcode"); else setSync("offline"); });
+        .catch((e) => { if (e.code === 401) lock(I18N.t("split.lock.enterPasscode", "Enter passcode")); else setSync("offline"); });
     }, 4000);
+  }
+
+  // ---------- i18n: language switcher + live re-render ----------
+  if (window.I18N) {
+    const host = $("#langHost"); if (host) I18N.mount(host);
+    window.addEventListener("i18n:change", () => { applyAdminUI(); setSync(lastSyncStatus); if (doc) render(); });
   }
 
   async function boot() {

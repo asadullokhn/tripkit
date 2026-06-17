@@ -20,7 +20,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Tripkit" />
   <link rel="stylesheet" href="/shared/tokens.css?v=1" />
-  <link rel="stylesheet" href="styles.css?v=18" />
+  <link rel="stylesheet" href="styles.css?v=20" />
+  <script src="/shared/i18n.js?v=1"></script>
 </head>
 <body>
   <div class="grain" aria-hidden="true"></div>
@@ -28,25 +29,26 @@
   <!-- passcode gate -->
   <div class="lock" id="lock" hidden>
     <form class="lock__card" id="lockForm">
-      <h2 class="lock__title">Enter passcode</h2>
+      <h2 class="lock__title" data-i18n="split.lock.title">Enter passcode</h2>
       <input id="lockInput" class="lock__input" type="password" inputmode="numeric"
-             pattern="[0-9]*" maxlength="32" autocomplete="off" placeholder="••••" aria-label="Passcode" />
+             pattern="[0-9]*" maxlength="32" autocomplete="off" placeholder="••••" aria-label="Passcode" data-i18n-al="split.lock.passcodeAria" />
       <p class="lock__err" id="lockErr" role="alert"></p>
-      <button type="submit" class="solid-btn">Unlock</button>
+      <button type="submit" class="solid-btn" data-i18n="split.lock.unlock">Unlock</button>
     </form>
   </div>
 
   <header class="topbar">
     <div class="topbar__inner">
       <div class="brand">
-        <span class="brand__nav"><a class="brand__kicker brand__home" href="/">← Tripkit</a><a class="brand__plan" id="planLink" href="/trip/">🗺 Plan</a></span>
+        <span class="brand__nav"><a class="brand__kicker brand__home" href="/">← Tripkit</a><a class="brand__plan" id="planLink" href="/trip/" data-i18n="split.nav.plan">🗺 Plan</a></span>
         <h1 class="brand__title" id="tripName">Split&nbsp;the&nbsp;Bill</h1>
       </div>
       <div class="topbar__actions">
-        <span class="sync" id="sync" title="Sync status"><span class="sync__dot" aria-hidden="true"></span><span id="syncLabel" aria-live="polite">syncing…</span></span>
-        <button id="loginBtn" class="ghost-btn" type="button" title="Log in to edit" hidden>Log in</button>
-        <button id="logoutBtn" class="ghost-btn admin-only" type="button" title="Log out">Log out</button>
-        <button id="exportBtn" class="ghost-btn" type="button" title="Export PDF">Export PDF</button>
+        <span class="sync" id="sync" title="Sync status" data-i18n-al="split.sync.statusAria"><span class="sync__dot" aria-hidden="true"></span><span id="syncLabel" aria-live="polite">syncing…</span></span>
+        <span id="langHost" class="lang-host"></span>
+        <button id="loginBtn" class="ghost-btn" type="button" title="Log in to edit" data-i18n="common.logIn" data-i18n-al="split.login.openAria" hidden>Log in</button>
+        <button id="logoutBtn" class="ghost-btn admin-only" type="button" title="Log out" data-i18n="common.logOut" data-i18n-al="common.logOut">Log out</button>
+        <button id="exportBtn" class="ghost-btn" type="button" title="Export PDF" data-i18n="split.export.pdf" data-i18n-al="split.export.pdf">Export PDF</button>
       </div>
     </div>
     <div class="progress" id="progress">
@@ -58,35 +60,35 @@
   <main class="layout">
     <div class="main-col">
       <section class="block" aria-label="People">
-        <h2 class="block__title">People
-          <button id="addPersonBtn" class="ghost-btn ghost-btn--sm admin-only" type="button">+ Person</button>
+        <h2 class="block__title"><span data-i18n="split.people.title">People</span>
+          <button id="addPersonBtn" class="ghost-btn ghost-btn--sm admin-only" type="button" data-i18n="split.people.add">+ Person</button>
         </h2>
         <div class="people-bar" id="peopleBar"></div>
       </section>
 
       <section class="block" aria-label="Shared trip costs">
-        <h2 class="block__title">Shared trip costs
-          <span class="block__hint">tap who’s splitting</span>
-          <button id="addExpenseBtn" class="ghost-btn ghost-btn--sm" type="button">+ Cost</button>
+        <h2 class="block__title"><span data-i18n="split.shared.title">Shared trip costs</span>
+          <span class="block__hint" data-i18n="split.shared.hint">tap who’s splitting</span>
+          <button id="addExpenseBtn" class="ghost-btn ghost-btn--sm" type="button" data-i18n="split.shared.add">+ Cost</button>
         </h2>
         <div class="shared" id="shared"></div>
       </section>
 
       <section class="block" aria-label="Restaurant receipts">
-        <h2 class="block__title">Receipts
-          <span class="block__hint">tap who shared each item</span>
+        <h2 class="block__title"><span data-i18n="split.receipts.title">Receipts</span>
+          <span class="block__hint" data-i18n="split.receipts.hint">tap who shared each item</span>
           <span class="block__actions">
-            <button id="ocrBtn" class="ghost-btn ghost-btn--sm" type="button" title="Add receipt from a photo" hidden>📷 Photo</button>
-            <button id="addReceiptBtn" class="ghost-btn ghost-btn--sm" type="button">+ Receipt</button>
+            <button id="ocrBtn" class="ghost-btn ghost-btn--sm" type="button" title="Add receipt from a photo" data-i18n="split.receipts.photo" data-i18n-al="split.receipts.photoAria" hidden>📷 Photo</button>
+            <button id="addReceiptBtn" class="ghost-btn ghost-btn--sm" type="button" data-i18n="split.receipts.add">+ Receipt</button>
           </span>
         </h2>
-        <p class="ocr-privacy" id="ocrPrivacy" hidden>📷 The photo is sent to the configured AI provider to read the receipt.</p>
+        <p class="ocr-privacy" id="ocrPrivacy" data-i18n="split.receipts.ocrPrivacy" hidden>📷 The photo is sent to the configured AI provider to read the receipt.</p>
         <div class="receipts" id="receipts"></div>
       </section>
 
       <section class="block final" aria-label="Final settlement">
-        <h2 class="block__title">Final settlement <span class="block__hint">who pays whom</span></h2>
-        <p class="plan-stale" id="planStale" hidden>⚠ Balances changed since publishing — re-generate to update the plan.</p>
+        <h2 class="block__title"><span data-i18n="split.final.title">Final settlement</span> <span class="block__hint" data-i18n="split.final.hint">who pays whom</span></h2>
+        <p class="plan-stale" id="planStale" data-i18n="split.final.stale" hidden>⚠ Balances changed since publishing — re-generate to update the plan.</p>
         <ul id="finalTransfers" class="final__list" aria-live="polite"></ul>
         <p class="final__foot" id="finalNote"></p>
         <div class="settle-admin" id="settleAdmin"></div>
@@ -95,14 +97,14 @@
 
     <aside class="settle" id="settle" aria-label="Settle up">
       <div class="settle__inner">
-        <button class="sheet-grip" id="sheetGrip" type="button" aria-label="Close settle up"></button>
-        <h2 class="settle__title">Settle up</h2>
+        <button class="sheet-grip" id="sheetGrip" type="button" aria-label="Close settle up" data-i18n-al="split.settle.closeAria"></button>
+        <h2 class="settle__title" data-i18n="split.settle.title">Settle up</h2>
         <div id="people" class="people"></div>
 
         <div class="adjust">
           <div class="adjust__head">
-            <h3>Manual adjustments</h3>
-            <button id="addAdjustBtn" class="ghost-btn ghost-btn--sm" type="button">+ Adjustment</button>
+            <h3 data-i18n="split.adjust.heading">Manual adjustments</h3>
+            <button id="addAdjustBtn" class="ghost-btn ghost-btn--sm" type="button" data-i18n="split.adjust.add">+ Adjustment</button>
           </div>
           <ul id="adjustList" class="adjust__list"></ul>
         </div>
@@ -119,20 +121,20 @@
   <!-- hidden file input for OCR -->
   <input type="file" id="ocrFile" accept="image/jpeg,image/png,image/webp" hidden />
   <div class="spinner-overlay" id="ocrSpinner" role="status" aria-live="polite" hidden>
-    <div class="spinner" aria-hidden="true"></div><span>Reading receipt…</span>
+    <div class="spinner" aria-hidden="true"></div><span data-i18n="split.spinner.reading">Reading receipt…</span>
   </div>
 
   <!-- login dialog -->
   <dialog id="loginDialog" class="dialog" aria-labelledby="loginTitle">
     <form class="dialog__form" id="loginForm">
-      <h3 class="dialog__title" id="loginTitle">Log in to edit</h3>
-      <label class="field"><span>Admin password</span>
+      <h3 class="dialog__title" id="loginTitle" data-i18n="split.login.title">Log in to edit</h3>
+      <label class="field"><span data-i18n="split.login.adminPassword">Admin password</span>
         <input id="loginPassword" type="password" autocomplete="current-password" required />
       </label>
       <p class="field__err" id="loginErr" role="alert" hidden></p>
       <div class="dialog__actions">
-        <button type="button" class="ghost-btn" id="loginCancel">Cancel</button>
-        <button type="submit" class="solid-btn" id="loginSubmit">Log in</button>
+        <button type="button" class="ghost-btn" id="loginCancel" data-i18n="common.cancel">Cancel</button>
+        <button type="submit" class="solid-btn" id="loginSubmit" data-i18n="common.logIn">Log in</button>
       </div>
     </form>
   </dialog>
@@ -140,15 +142,15 @@
   <!-- person dialog -->
   <dialog id="personDialog" class="dialog" aria-labelledby="pnTitle">
     <form class="dialog__form" id="personForm">
-      <h3 class="dialog__title" id="pnTitle">Add person</h3>
-      <label class="field"><span>Name</span><input id="pnName" type="text" maxlength="40" /></label>
-      <div class="field"><span>Colour</span><div class="swatches" id="pnSwatches" role="radiogroup" aria-label="Person colour"></div></div>
+      <h3 class="dialog__title" id="pnTitle" data-i18n="split.person.addTitle">Add person</h3>
+      <label class="field"><span data-i18n="split.person.name">Name</span><input id="pnName" type="text" maxlength="40" /></label>
+      <div class="field"><span data-i18n="split.person.colour">Colour</span><div class="swatches" id="pnSwatches" role="radiogroup" aria-label="Person colour" data-i18n-al="split.person.colourAria"></div></div>
       <p class="field__err" id="pnErr" role="alert" hidden></p>
       <div class="dialog__actions">
-        <button type="button" class="ghost-btn danger admin-only" id="pnDelete" hidden>Delete</button>
+        <button type="button" class="ghost-btn danger admin-only" id="pnDelete" data-i18n="common.delete" hidden>Delete</button>
         <span style="flex:1"></span>
-        <button type="button" class="ghost-btn" id="pnCancel">Cancel</button>
-        <button type="submit" class="solid-btn" id="pnSave">Save</button>
+        <button type="button" class="ghost-btn" id="pnCancel" data-i18n="common.cancel">Cancel</button>
+        <button type="submit" class="solid-btn" id="pnSave" data-i18n="common.save">Save</button>
       </div>
     </form>
   </dialog>
@@ -156,24 +158,24 @@
   <!-- receipt dialog (also used for OCR draft confirm) -->
   <dialog id="receiptDialog" class="dialog dialog--wide" aria-labelledby="rcTitle">
     <form class="dialog__form" id="receiptForm">
-      <h3 class="dialog__title" id="rcTitle">Add receipt</h3>
+      <h3 class="dialog__title" id="rcTitle" data-i18n="split.receipt.addTitle">Add receipt</h3>
       <p class="rc-warnings" id="rcWarnings" hidden></p>
       <div class="field-row">
-        <label class="field"><span>Title</span><input id="rcName" type="text" maxlength="60" /></label>
-        <label class="field"><span>Date</span><input id="rcDate" type="date" /></label>
+        <label class="field"><span data-i18n="split.receipt.titleLabel">Title</span><input id="rcName" type="text" maxlength="60" /></label>
+        <label class="field"><span data-i18n="split.receipt.date">Date</span><input id="rcDate" type="date" /></label>
       </div>
-      <label class="field"><span>Paid by</span><select id="rcPayer"></select></label>
-      <div class="field"><span>Items</span><div class="rc-items" id="rcItems"></div>
-        <button type="button" class="ghost-btn ghost-btn--sm" id="rcAddItem">+ Item</button>
+      <label class="field"><span data-i18n="split.receipt.paidBy">Paid by</span><select id="rcPayer"></select></label>
+      <div class="field"><span data-i18n="split.receipt.items">Items</span><div class="rc-items" id="rcItems"></div>
+        <button type="button" class="ghost-btn ghost-btn--sm" id="rcAddItem" data-i18n="split.receipt.addItem">+ Item</button>
       </div>
-      <label class="field"><span>Grand total (incl. tax/service) — 0 = sum of items</span>
+      <label class="field"><span data-i18n="split.receipt.grandTotal">Grand total (incl. tax/service) — 0 = sum of items</span>
         <input id="rcGrand" type="number" min="0" step="1" inputmode="numeric" value="0" /></label>
       <p class="field__err" id="rcErr" role="alert" hidden></p>
       <div class="dialog__actions">
-        <button type="button" class="ghost-btn danger" id="rcDelete" hidden>Delete</button>
+        <button type="button" class="ghost-btn danger" id="rcDelete" data-i18n="common.delete" hidden>Delete</button>
         <span style="flex:1"></span>
-        <button type="button" class="ghost-btn" id="rcCancel">Cancel</button>
-        <button type="submit" class="solid-btn" id="rcSave">Save</button>
+        <button type="button" class="ghost-btn" id="rcCancel" data-i18n="common.cancel">Cancel</button>
+        <button type="submit" class="solid-btn" id="rcSave" data-i18n="common.save">Save</button>
       </div>
     </form>
   </dialog>
@@ -181,31 +183,31 @@
   <!-- expense (shared cost) dialog -->
   <dialog id="expenseDialog" class="dialog" aria-labelledby="exTitle">
     <form class="dialog__form" id="expenseForm">
-      <h3 class="dialog__title" id="exTitle">Add shared cost</h3>
-      <label class="field"><span>Title</span><input id="exName" type="text" maxlength="60" /></label>
+      <h3 class="dialog__title" id="exTitle" data-i18n="split.expense.addTitle">Add shared cost</h3>
+      <label class="field"><span data-i18n="split.expense.titleLabel">Title</span><input id="exName" type="text" maxlength="60" /></label>
       <div class="field-row">
-        <label class="field"><span>Amount</span><input id="exAmount" type="number" min="0" step="1" inputmode="numeric" /></label>
-        <label class="field"><span>Paid by</span><select id="exPayer"></select></label>
+        <label class="field"><span data-i18n="split.expense.amount">Amount</span><input id="exAmount" type="number" min="0" step="1" inputmode="numeric" /></label>
+        <label class="field"><span data-i18n="split.receipt.paidBy">Paid by</span><select id="exPayer"></select></label>
       </div>
-      <div class="field"><span>Split</span>
-        <div class="seg seg--4" id="exSplitMode" role="radiogroup" aria-label="Split mode">
-          <button type="button" class="seg__btn is-on" role="radio" aria-checked="true" data-mode="EVENLY">Evenly</button>
-          <button type="button" class="seg__btn" role="radio" aria-checked="false" data-mode="BY_SHARES">Shares</button>
+      <div class="field"><span data-i18n="split.expense.split">Split</span>
+        <div class="seg seg--4" id="exSplitMode" role="radiogroup" aria-label="Split mode" data-i18n-al="split.expense.splitModeAria">
+          <button type="button" class="seg__btn is-on" role="radio" aria-checked="true" data-mode="EVENLY" data-i18n="split.expense.evenly">Evenly</button>
+          <button type="button" class="seg__btn" role="radio" aria-checked="false" data-mode="BY_SHARES" data-i18n="split.expense.shares">Shares</button>
           <button type="button" class="seg__btn" role="radio" aria-checked="false" data-mode="BY_PERCENTAGE">%</button>
-          <button type="button" class="seg__btn" role="radio" aria-checked="false" data-mode="BY_AMOUNT">Amount</button>
+          <button type="button" class="seg__btn" role="radio" aria-checked="false" data-mode="BY_AMOUNT" data-i18n="split.expense.amountMode">Amount</button>
         </div>
       </div>
-      <div class="field"><span id="exPartLabel">Shared by</span><div class="ex-parts" id="exParts"></div></div>
+      <div class="field"><span id="exPartLabel" data-i18n="split.expense.sharedBy">Shared by</span><div class="ex-parts" id="exParts"></div></div>
       <div class="ex-summary-row">
         <span class="ex-summary" id="exSummary"></span>
-        <button type="button" class="mini-btn" id="exDistribute">Distribute evenly</button>
+        <button type="button" class="mini-btn" id="exDistribute" data-i18n="split.expense.distribute">Distribute evenly</button>
       </div>
       <p class="field__err" id="exErr" role="alert" hidden></p>
       <div class="dialog__actions">
-        <button type="button" class="ghost-btn danger" id="exDelete" hidden>Delete</button>
+        <button type="button" class="ghost-btn danger" id="exDelete" data-i18n="common.delete" hidden>Delete</button>
         <span style="flex:1"></span>
-        <button type="button" class="ghost-btn" id="exCancel">Cancel</button>
-        <button type="submit" class="solid-btn" id="exSave">Save</button>
+        <button type="button" class="ghost-btn" id="exCancel" data-i18n="common.cancel">Cancel</button>
+        <button type="submit" class="solid-btn" id="exSave" data-i18n="common.save">Save</button>
       </div>
     </form>
   </dialog>
@@ -213,21 +215,21 @@
   <!-- adjustment dialog -->
   <dialog id="adjustDialog" class="dialog" aria-labelledby="adjTitle">
     <form class="dialog__form" id="adjustForm">
-      <h3 class="dialog__title" id="adjTitle">Add adjustment</h3>
-      <div class="field"><span>Type</span>
-        <div class="seg" id="adjKind" role="radiogroup" aria-label="Adjustment type">
-          <button type="button" class="seg__btn is-on" role="radio" aria-checked="true" data-kind="debt">Owes (extra debt)</button>
-          <button type="button" class="seg__btn" role="radio" aria-checked="false" data-kind="payment">Already paid</button>
+      <h3 class="dialog__title" id="adjTitle" data-i18n="split.adjust.addTitle">Add adjustment</h3>
+      <div class="field"><span data-i18n="split.adjust.type">Type</span>
+        <div class="seg" id="adjKind" role="radiogroup" aria-label="Adjustment type" data-i18n-al="split.adjust.typeAria">
+          <button type="button" class="seg__btn is-on" role="radio" aria-checked="true" data-kind="debt" data-i18n="split.adjust.owes">Owes (extra debt)</button>
+          <button type="button" class="seg__btn" role="radio" aria-checked="false" data-kind="payment" data-i18n="split.adjust.alreadyPaid">Already paid</button>
         </div>
       </div>
-      <label class="field"><span id="adjFromLabel">Who owes</span><select id="adjFrom" required></select></label>
-      <label class="field"><span>To (receives)</span><select id="adjTo" required></select></label>
-      <label class="field"><span>Amount</span><input id="adjAmount" type="number" min="0" step="1" inputmode="numeric" /></label>
-      <label class="field"><span>Label</span><input id="adjLabel" type="text" maxlength="60" placeholder="e.g. e-scooter rental" /></label>
+      <label class="field"><span id="adjFromLabel" data-i18n="split.adjust.whoOwes">Who owes</span><select id="adjFrom" required></select></label>
+      <label class="field"><span data-i18n="split.adjust.toReceives">To (receives)</span><select id="adjTo" required></select></label>
+      <label class="field"><span data-i18n="split.expense.amount">Amount</span><input id="adjAmount" type="number" min="0" step="1" inputmode="numeric" /></label>
+      <label class="field"><span data-i18n="split.adjust.label">Label</span><input id="adjLabel" type="text" maxlength="60" placeholder="e.g. e-scooter rental" data-i18n-ph="split.adjust.labelPh" /></label>
       <p class="field__err" id="adjErr" role="alert" hidden></p>
       <div class="dialog__actions">
-        <button type="button" class="ghost-btn" id="adjCancel">Cancel</button>
-        <button type="submit" class="solid-btn" id="adjSave">Add</button>
+        <button type="button" class="ghost-btn" id="adjCancel" data-i18n="common.cancel">Cancel</button>
+        <button type="submit" class="solid-btn" id="adjSave" data-i18n="common.add">Add</button>
       </div>
     </form>
   </dialog>
@@ -235,17 +237,17 @@
   <!-- reusable searchable person picker -->
   <dialog id="pickerDialog" class="dialog" aria-labelledby="pickerTitle">
     <div class="dialog__form picker">
-      <h3 class="dialog__title" id="pickerTitle">Who shared this?</h3>
-      <input id="pickerSearch" class="picker-search" type="search" placeholder="Search people…" aria-label="Search people" autocomplete="off" />
+      <h3 class="dialog__title" id="pickerTitle" data-i18n="split.picker.title">Who shared this?</h3>
+      <input id="pickerSearch" class="picker-search" type="search" placeholder="Search people…" aria-label="Search people" autocomplete="off" data-i18n-ph="split.picker.searchPh" data-i18n-al="split.picker.searchAria" />
       <div class="picker-tools">
-        <button type="button" class="mini-btn" id="pickerAll">Select all</button>
-        <button type="button" class="mini-btn" id="pickerNone">Clear</button>
+        <button type="button" class="mini-btn" id="pickerAll" data-i18n="split.picker.selectAll">Select all</button>
+        <button type="button" class="mini-btn" id="pickerNone" data-i18n="common.clear">Clear</button>
         <span class="picker-count" id="pickerCount" aria-live="polite">0 selected</span>
       </div>
       <div class="picker-list" id="pickerList"></div>
       <div class="dialog__actions">
-        <button type="button" class="ghost-btn" id="pickerCancel">Cancel</button>
-        <button type="button" class="solid-btn" id="pickerSave">Done</button>
+        <button type="button" class="ghost-btn" id="pickerCancel" data-i18n="common.cancel">Cancel</button>
+        <button type="button" class="solid-btn" id="pickerSave" data-i18n="common.done">Done</button>
       </div>
     </div>
   </dialog>
@@ -253,11 +255,11 @@
   <!-- themed confirm -->
   <dialog id="confirmDialog" class="dialog" aria-labelledby="confirmTitle">
     <div class="dialog__form">
-      <h3 class="dialog__title" id="confirmTitle">Are you sure?</h3>
+      <h3 class="dialog__title" id="confirmTitle" data-i18n="split.confirm.title">Are you sure?</h3>
       <p class="confirm-body" id="confirmBody"></p>
       <div class="dialog__actions">
-        <button type="button" class="ghost-btn" id="confirmCancel">Cancel</button>
-        <button type="button" class="solid-btn" id="confirmOk">Confirm</button>
+        <button type="button" class="ghost-btn" id="confirmCancel" data-i18n="common.cancel">Cancel</button>
+        <button type="button" class="solid-btn" id="confirmOk" data-i18n="common.confirm">Confirm</button>
       </div>
     </div>
   </dialog>
@@ -265,20 +267,20 @@
   <!-- proof of payment: shared upload input + lightbox viewer -->
   <input type="file" id="proofFile" accept="image/jpeg,image/png,image/webp" hidden />
   <div class="lightbox" id="lightbox" hidden>
-    <button class="lightbox__close" id="lightboxClose" type="button" aria-label="Close">✕</button>
-    <img id="lightboxImg" alt="Payment proof" />
+    <button class="lightbox__close" id="lightboxClose" type="button" aria-label="Close" data-i18n-al="common.close">✕</button>
+    <img id="lightboxImg" alt="Payment proof" data-i18n-al="split.proof.imgAlt" />
   </div>
 
   <!-- payout / bank details dialog -->
   <dialog id="bankDialog" class="dialog" aria-labelledby="bankTitle">
     <form class="dialog__form" id="bankForm">
-      <h3 class="dialog__title" id="bankTitle">Payout details</h3>
-      <label class="field"><span>Bank / e-wallet account</span>
-        <input id="bankInput" type="text" maxlength="200" placeholder="e.g. BCA 1234567890 a/n Name" /></label>
+      <h3 class="dialog__title" id="bankTitle" data-i18n="split.bank.title">Payout details</h3>
+      <label class="field"><span data-i18n="split.bank.account">Bank / e-wallet account</span>
+        <input id="bankInput" type="text" maxlength="200" placeholder="e.g. BCA 1234567890 a/n Name" data-i18n-ph="split.bank.accountPh" /></label>
       <p class="field__err" id="bankErr" role="alert" hidden></p>
       <div class="dialog__actions">
-        <button type="button" class="ghost-btn" id="bankCancel">Cancel</button>
-        <button type="submit" class="solid-btn" id="bankSave">Save</button>
+        <button type="button" class="ghost-btn" id="bankCancel" data-i18n="common.cancel">Cancel</button>
+        <button type="submit" class="solid-btn" id="bankSave" data-i18n="common.save">Save</button>
       </div>
     </form>
   </dialog>
@@ -286,6 +288,6 @@
   <!-- print-only report -->
   <div id="report" class="report" aria-hidden="true"></div>
 
-  <script src="app.js?v=17"></script>
+  <script src="app.js?v=20"></script>
 </body>
 </html>

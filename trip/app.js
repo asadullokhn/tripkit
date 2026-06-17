@@ -13,6 +13,10 @@
 
   const tripId = new URLSearchParams(location.search).get("t");
 
+  // i18n shim (no-op if /shared/i18n.js failed to load)
+  const I18N = window.I18N || { t: (k, d) => (d != null ? d : k), mount() {}, lang: "en" };
+  const t = (k, d, v) => I18N.t(k, d, v);
+
   // --- state ---
   let pass = localStorage.getItem(PASS_KEY) || "";
   let admin = false, aiEnabled = false, authed = false, editing = false;
@@ -43,6 +47,8 @@
     finish:    { icon: "🏁", label: "Finish",       g: ["#f0884a", "#5a2e16"] },
   };
   const typeOf = (t) => TYPE[t] || TYPE.activity;
+  const typeKeyOf = (t) => (TYPE[t] ? t : "activity");
+  const typeLabel = (t) => I18N.t("trip.type." + typeKeyOf(t), typeOf(t).label);
   const LOGI = new Set(["start", "fuel", "breakfast", "food", "hotel", "depart", "beach", "finish"]);
 
   const DAYCOLORS = ["#35b06a", "#25b9cc", "#f0884a", "#c08cff", "#ff6f59", "#ffd66b", "#7bd88f", "#2fd6c3"];
@@ -65,6 +71,11 @@
   const MOBILITY_LABEL = { easy: "Easy walking", moderate: "Some walking", active: "Active days" };
   const DIET_OPTS = ["halal", "veg", "vegan", "no-pork", "no-alcohol", "gluten-free"];
   const DIET_LABEL = { halal: "Halal", veg: "Vegetarian", vegan: "Vegan", "no-pork": "No pork", "no-alcohol": "No alcohol", "gluten-free": "Gluten-free" };
+  const DIET_KEY = { halal: "halal", veg: "veg", vegan: "vegan", "no-pork": "noPork", "no-alcohol": "noAlcohol", "gluten-free": "glutenFree" };
+  const paceLabel = (k) => PACE_LABEL[k] ? I18N.t("trip.pace." + k, PACE_LABEL[k]) : "";
+  const budgetLabel = (k) => BUDGET_LABEL[k] ? I18N.t("trip.budget." + k, BUDGET_LABEL[k]) : "";
+  const mobilityLabel = (k) => MOBILITY_LABEL[k] ? I18N.t("trip.mobility." + k, MOBILITY_LABEL[k]) : "";
+  const dietLabel = (k) => I18N.t("trip.diet." + (DIET_KEY[k] || k), DIET_LABEL[k] || k);
   // derive a Date for day index from profile.startDate (ISO yyyy-mm-dd), local-time, DST-safe
   function dayDate(idx) {
     const sd = profile && profile.startDate; if (!sd) return null;
@@ -259,6 +270,7 @@
     flight:  { icon: "✈️", label: "Flight",  road: false },
   };
   const modeOf = (s) => (s && MODES[s.mode] ? s.mode : "car");   // how you ARRIVE at s (from the prior pinned stop)
+  const modeLabel = (k) => MODES[k] ? I18N.t("trip.mode." + k, MODES[k].label) : "";
   const legSig = (a, b, m) => `${a.lat.toFixed(5)},${a.lng.toFixed(5)};${b.lat.toFixed(5)},${b.lng.toFixed(5)};${m}`;
   function haversineKm(A, B) {
     const R = 6371, d = (x) => x * Math.PI / 180;
@@ -349,7 +361,7 @@
       const icon = L.divIcon({ className: "mk-wrap" + (f.stop.done ? " is-done" : ""), html: `<div class="mk ${logi ? "is-logi" : ""}" style="--mk:${f.color}"><span>${badge}</span></div>`,
         iconSize: [30, 30], iconAnchor: [15, 35], popupAnchor: [0, -34] });
       const m = L.marker([f.stop.lat, f.stop.lng], { icon, riseOnHover: true }).addTo(layer);
-      m.bindPopup(`<div class="pop-badge">${esc(typeOf(f.stop.type).label)}</div><div class="pop-name">${esc(f.stop.name)}</div>`);
+      m.bindPopup(`<div class="pop-badge">${esc(typeLabel(f.stop.type))}</div><div class="pop-name">${esc(f.stop.name)}</div>`);
       m.on("click", () => activateStop(k, "map"));
       markers.push(m);
     });
@@ -365,52 +377,52 @@
     if (!stop.linkedExpenseId) return "";
     if (fullDoc) {
       const e = (fullDoc.expenses || []).find((x) => x.id === stop.linkedExpenseId);
-      if (e) return `<a class="cost-chip" href="/split/?t=${encodeURIComponent(tripId)}" title="View in Bills">Rp ${Number(e.amount).toLocaleString("en-US")}</a>`;
+      if (e) return `<a class="cost-chip" href="/split/?t=${encodeURIComponent(tripId)}" title="${esc(t("trip.cost.viewInBills", "View in Bills"))}">Rp ${Number(e.amount).toLocaleString("en-US")}</a>`;
       const r = (fullDoc.receipts || []).find((x) => x.id === stop.linkedExpenseId);
       if (r) return `<a class="cost-chip" href="/split/?t=${encodeURIComponent(tripId)}">Rp ${Number(r.grandTotal).toLocaleString("en-US")}</a>`;
-      return `<span class="cost-chip warn" title="linked cost was removed">⚠ cost</span>`;
+      return `<span class="cost-chip warn" title="${esc(t("trip.cost.removedTitle", "linked cost was removed"))}">⚠ ${esc(t("trip.cost.chip", "cost"))}</span>`;
     }
-    return `<a class="cost-chip" href="/split/?t=${encodeURIComponent(tripId)}" title="has a linked cost">💸 cost</a>`;
+    return `<a class="cost-chip" href="/split/?t=${encodeURIComponent(tripId)}" title="${esc(t("trip.cost.hasLinkedTitle", "has a linked cost"))}">💸 ${esc(t("trip.cost.chip", "cost"))}</a>`;
   }
   function stopCard(di, si, gi, tl) {
-    const day = days()[di], stop = day.stops[si], t = typeOf(stop.type);
+    const day = days()[di], stop = day.stops[si], ty = typeOf(stop.type);
     const time = stop.time ? `<span class="stop-time">${esc(stop.time)}</span>` : "";
     // computed timeline row: arrival + visit duration line, optional "leave prev by" badge + late warning
     const row = tl && tl.rows[si];
     let timeline = "";
     if (row && row.arrival != null) {
-      const dur = (stop.durationMin > 0) ? ` · ${fmtDuration(stop.durationMin)} here` : "";
+      const dur = (stop.durationMin > 0) ? ` · ${t("trip.card.here", "{d} here", { d: fmtDuration(stop.durationMin) })}` : "";
       const fixed = parseTimeMin(stop.time) != null;
-      timeline = `<div class="stop-clock${row.late ? " late" : ""}">${fixed ? "🕒" : "arr"} ${fmtClock(row.arrival)}${dur}${row.late ? ' <span class="late-tag">⚠ tight</span>' : ""}</div>`;
+      timeline = `<div class="stop-clock${row.late ? " late" : ""}">${fixed ? "🕒" : esc(t("trip.card.arr", "arr"))} ${fmtClock(row.arrival)}${dur}${row.late ? ` <span class="late-tag">⚠ ${esc(t("trip.card.tight", "tight"))}</span>` : ""}</div>`;
     }
     const leaveBy = (row && row.leaveBy != null && si > 0)
-      ? `<span class="leave-by" title="leave the previous stop by this time">leave by ${fmtClock(row.leaveBy)}</span>` : "";
+      ? `<span class="leave-by" title="${esc(t("trip.card.leaveByTitle", "leave the previous stop by this time"))}">${esc(t("trip.card.leaveBy", "leave by {time}", { time: fmtClock(row.leaveBy) }))}</span>` : "";
     const lk = stop.links || {};
     const mapsHref = lk.maps || stop.url || "";
     const chip = (href, label) => href ? `<a class="stop-chip" href="${esc(href)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${label}</a>` : "";
-    const linksRow = [chip(mapsHref, "🗺 Maps"), chip(lk.booking, "🏨 Book"), chip(lk.tickets, "🎟 Tickets")].filter(Boolean).join("");
+    const linksRow = [chip(mapsHref, "🗺 " + esc(t("trip.card.maps", "Maps"))), chip(lk.booking, "🏨 " + esc(t("trip.card.book", "Book"))), chip(lk.tickets, "🎟 " + esc(t("trip.card.tickets", "Tickets")))].filter(Boolean).join("");
     const links = linksRow ? `<div class="stop-links">${linksRow}</div>` : "";
-    const dur = (stop.durationMin > 0) ? `<span class="dur-pill" title="visit duration">⏱ ${fmtDuration(stop.durationMin)}</span>` : "";
-    const nopin = hasPin(stop) ? "" : `<span class="nopin" title="no map pin yet">no pin</span>`;
+    const dur = (stop.durationMin > 0) ? `<span class="dur-pill" title="${esc(t("trip.card.visitDuration", "visit duration"))}">⏱ ${fmtDuration(stop.durationMin)}</span>` : "";
+    const nopin = hasPin(stop) ? "" : `<span class="nopin" title="${esc(t("trip.card.noPinTitle", "no map pin yet"))}">${esc(t("trip.card.noPin", "no pin"))}</span>`;
     let prevPin = -1;
     if (hasPin(stop)) for (let j = si - 1; j >= 0; j--) { if (hasPin(day.stops[j])) { prevPin = j; break; } }
     const legPill = (prevPin >= 0 || leaveBy) ? `<div class="leg-row">${prevPin >= 0 ? `<span class="leg-pill" data-di="${di}" data-a="${prevPin}" data-b="${si}">${esc(legLabel(day.stops[prevPin], stop))}</span>` : ""}${leaveBy}</div>` : "";
     const edit = editing ? `
       <div class="stop-edit">
-        <button class="se mv" data-act="up" data-di="${di}" data-si="${si}" title="Move up" aria-label="Move up">▲</button>
-        <button class="se mv" data-act="down" data-di="${di}" data-si="${si}" title="Move down" aria-label="Move down">▼</button>
-        <button class="se" data-act="cost" data-di="${di}" data-si="${si}" title="Link a cost">💸</button>
-        <button class="se" data-act="edit" data-di="${di}" data-si="${si}" title="Edit">✎</button>
+        <button class="se mv" data-act="up" data-di="${di}" data-si="${si}" title="${esc(t("trip.card.moveUp", "Move up"))}" aria-label="${esc(t("trip.card.moveUp", "Move up"))}">▲</button>
+        <button class="se mv" data-act="down" data-di="${di}" data-si="${si}" title="${esc(t("trip.card.moveDown", "Move down"))}" aria-label="${esc(t("trip.card.moveDown", "Move down"))}">▼</button>
+        <button class="se" data-act="cost" data-di="${di}" data-si="${si}" title="${esc(t("trip.cost.title", "Link a cost"))}">💸</button>
+        <button class="se" data-act="edit" data-di="${di}" data-si="${si}" title="${esc(t("common.edit", "Edit"))}">✎</button>
       </div>` : "";
     return `
       <li class="tl-item anim ${stop.done ? "is-done" : ""}" data-gi="${gi}" data-di="${di}" data-si="${si}" style="animation-delay:${Math.min(0.6, 0.05 * gi + 0.08)}s">
-        <div class="tl-node ${LOGI.has(stop.type) ? "is-logi" : ""}" ${authed ? `data-sid="1" data-act="done" data-di="${di}" data-si="${si}" role="button" tabindex="0" aria-label="${stop.done ? "Mark not done" : "Mark done"}"` : ""}><span class="nd-badge">${badgeFor(day, stop, si)}</span><span class="nd-check">✓</span></div>
+        <div class="tl-node ${LOGI.has(stop.type) ? "is-logi" : ""}" ${authed ? `data-sid="1" data-act="done" data-di="${di}" data-si="${si}" role="button" tabindex="0" aria-label="${stop.done ? esc(t("trip.card.markNotDone", "Mark not done")) : esc(t("trip.card.markDone", "Mark done"))}"` : ""}><span class="nd-badge">${badgeFor(day, stop, si)}</span><span class="nd-check">✓</span></div>
         <button class="stop" data-idx="${gi}">
-          <div class="thumb" style="--thumb:linear-gradient(150deg, ${t.g[0]}, ${t.g[1]})"><span>${t.icon}</span></div>
+          <div class="thumb" style="--thumb:linear-gradient(150deg, ${ty.g[0]}, ${ty.g[1]})"><span>${ty.icon}</span></div>
           <div class="stop-body">
             ${legPill}
             <div class="stop-top"><span class="stop-name">${esc(stop.name)}</span>${time}</div>
-            <div class="stop-sub"><span class="type">${esc(t.label)}</span>${dur}${nopin}${costChip(stop)}</div>
+            <div class="stop-sub"><span class="type">${esc(typeLabel(stop.type))}</span>${dur}${nopin}${costChip(stop)}</div>
             ${timeline}
             ${stop.note ? `<p class="stop-note">${esc(stop.note)}</p>` : ""}
             ${links}
@@ -422,27 +434,28 @@
   function dayHead(di, tl) {
     const day = days()[di], dir = dirUrl(day);
     const dateText = day.dateLabel || fmtDayDate(dayDate(di));   // manual dateLabel wins; else derive from startDate
-    const addDay = editing ? `<button class="eb-btn sm" data-act="editday" data-di="${di}">✎ day</button>
-      <button class="eb-btn sm" data-act="dayup" data-di="${di}" title="Move day earlier">▲</button>
-      <button class="eb-btn sm" data-act="daydown" data-di="${di}" title="Move day later">▼</button>` : "";
+    const addDay = editing ? `<button class="eb-btn sm" data-act="editday" data-di="${di}">✎ ${esc(t("trip.day.dayWord", "day"))}</button>
+      <button class="eb-btn sm" data-act="dayup" data-di="${di}" title="${esc(t("trip.day.moveEarlier", "Move day earlier"))}">▲</button>
+      <button class="eb-btn sm" data-act="daydown" data-di="${di}" title="${esc(t("trip.day.moveLater", "Move day later"))}">▼</button>` : "";
     // schedule chip: ends ~HH:MM · {driving total}
     let schedChip = "";
     if (tl && tl.endsAt != null) {
       const drive = tl.driveMin > 0 ? ` · 🚗 ${fmtDuration(tl.driveMin)}` : "";
-      schedChip = `<span class="day-chip">ends ~${fmtClock(tl.endsAt)}${drive}</span>`;
+      schedChip = `<span class="day-chip">${esc(t("trip.day.ends", "ends ~{time}", { time: fmtClock(tl.endsAt) }))}${drive}</span>`;
     }
     const wxChip = weatherChipHtml(di);
     const budget = budgetGaugeHtml(di);
-    const shareDay = `<button class="eb-btn sm" data-act="shareday" data-di="${di}" title="Share this day">↗ Share</button>`;
+    const shareDay = `<button class="eb-btn sm" data-act="shareday" data-di="${di}" title="${esc(t("trip.day.shareTitle", "Share this day"))}">↗ ${esc(t("trip.bar.share", "Share"))}</button>`;
     const chips = (schedChip || wxChip) ? `<div class="day-chips">${schedChip}${wxChip}</div>` : "";
+    const dayFallback = t("trip.day.dayN", "Day {n}", { n: di + 1 });
     return `
       <div class="day-head">
-        <span class="day-eyebrow">${esc(day.label || "Day " + (di + 1))}${dateText ? `<span class="pill">· ${esc(dateText)}</span>` : ""}</span>
-        <h2 class="day-title">${esc(day.title || "Day " + (di + 1))}</h2>
+        <span class="day-eyebrow">${esc(day.label || dayFallback)}${dateText ? `<span class="pill">· ${esc(dateText)}</span>` : ""}</span>
+        <h2 class="day-title">${esc(day.title || dayFallback)}</h2>
         ${chips}
         ${budget}
         <div class="day-actions">
-          ${dir ? `<a class="route-btn" href="${dir}" target="_blank" rel="noopener">Open route ↗</a>` : ""}
+          ${dir ? `<a class="route-btn" href="${dir}" target="_blank" rel="noopener">${esc(t("trip.day.openRoute", "Open route ↗"))}</a>` : ""}
           ${shareDay}
           ${addDay}
         </div>
@@ -458,8 +471,8 @@
     if (!planned && !hasActual && !target) return "";
     const over = target && planned > target;
     const pct = target ? Math.min(100, Math.round(planned / target * 100)) : (planned ? 100 : 0);
-    const targetTxt = target ? ` / ${moneyRp(target)} planned` : " planned";
-    const actualTxt = hasActual ? `<span class="bg-actual">actual ${moneyRp(actual)}</span>` : "";
+    const targetTxt = target ? ` / ${t("trip.budget.ofTarget", "{amt} planned", { amt: moneyRp(target) })}` : " " + t("trip.budget.planned", "planned");
+    const actualTxt = hasActual ? `<span class="bg-actual">${esc(t("trip.budget.actual", "actual {amt}", { amt: moneyRp(actual) }))}</span>` : "";
     return `<div class="budget-gauge${over ? " over" : ""}">
       <div class="bg-bar"><span style="width:${pct}%"></span></div>
       <div class="bg-label"><span class="bg-planned">${moneyRp(planned)}${targetTxt}</span>${actualTxt}</div>
@@ -476,28 +489,30 @@
     if (!profile) return "";
     const chips = [];
     const dates = datesSummary(); if (dates) chips.push(`<span class="ps-chip">🗓 <b>${esc(dates)}</b></span>`);
-    if (profile.pace && PACE_LABEL[profile.pace]) chips.push(`<span class="ps-chip">⚡ ${esc(PACE_LABEL[profile.pace])}</span>`);
-    if (profile.budgetLevel && BUDGET_LABEL[profile.budgetLevel]) chips.push(`<span class="ps-chip">💰 ${esc(BUDGET_LABEL[profile.budgetLevel])}</span>`);
-    (profile.dietary || []).forEach((d) => chips.push(`<span class="ps-chip">🍽 ${esc(DIET_LABEL[d] || d)}</span>`));
+    if (profile.pace && PACE_LABEL[profile.pace]) chips.push(`<span class="ps-chip">⚡ ${esc(paceLabel(profile.pace))}</span>`);
+    if (profile.budgetLevel && BUDGET_LABEL[profile.budgetLevel]) chips.push(`<span class="ps-chip">💰 ${esc(budgetLabel(profile.budgetLevel))}</span>`);
+    (profile.dietary || []).forEach((d) => chips.push(`<span class="ps-chip">🍽 ${esc(dietLabel(d))}</span>`));
     const grp = groupSummary(); if (grp) chips.push(`<span class="ps-chip">👥 ${esc(grp)}</span>`);
     return chips.length ? `<div class="profile-summary">${chips.join("")}</div>` : "";
   }
   function groupSummary() {
     const a = +profile.adults || 0, k = +profile.kids || 0; if (!a && !k) return "";
-    const p = []; if (a) p.push(`${a} adult${a > 1 ? "s" : ""}`); if (k) p.push(`${k} kid${k > 1 ? "s" : ""}`);
+    const p = [];
+    if (a) p.push(a > 1 ? t("trip.group.adults", "{n} adults", { n: a }) : t("trip.group.adult", "{n} adult", { n: a }));
+    if (k) p.push(k > 1 ? t("trip.group.kids", "{n} kids", { n: k }) : t("trip.group.kid", "{n} kid", { n: k }));
     return p.join(" · ");
   }
   // public, non-money "good to know" strip
   function goodToKnowHtml() {
     if (authed || !profile) return "";
     const bits = [];
-    if ((profile.dietary || []).includes("halal")) bits.push("Halal-friendly");
-    else if ((profile.dietary || []).length) bits.push((profile.dietary || []).map((d) => DIET_LABEL[d] || d).join(", "));
-    if (profile.pace && PACE_LABEL[profile.pace]) bits.push(PACE_LABEL[profile.pace] + " pace");
-    if (profile.mobility && MOBILITY_LABEL[profile.mobility]) bits.push(MOBILITY_LABEL[profile.mobility]);
-    if ((+profile.kids || 0) > 0) bits.push("Family");
+    if ((profile.dietary || []).includes("halal")) bits.push(t("trip.gtk.halalFriendly", "Halal-friendly"));
+    else if ((profile.dietary || []).length) bits.push((profile.dietary || []).map((d) => dietLabel(d)).join(", "));
+    if (profile.pace && PACE_LABEL[profile.pace]) bits.push(t("trip.gtk.pace", "{pace} pace", { pace: paceLabel(profile.pace) }));
+    if (profile.mobility && MOBILITY_LABEL[profile.mobility]) bits.push(mobilityLabel(profile.mobility));
+    if ((+profile.kids || 0) > 0) bits.push(t("trip.gtk.family", "Family"));
     if (!bits.length) return "";
-    return `<div class="good-to-know"><span class="gtk-label">Good to know</span>${bits.map((b) => `<span class="gtk-chip">${esc(b)}</span>`).join("")}</div>`;
+    return `<div class="good-to-know"><span class="gtk-label">${esc(t("trip.gtk.label", "Good to know"))}</span>${bits.map((b) => `<span class="gtk-chip">${esc(b)}</span>`).join("")}</div>`;
   }
 
   function renderSheet() {
@@ -505,12 +520,12 @@
     if (!days().length) {
       inner.innerHTML = `<div class="empty-itin">
         <div class="empty-emoji">🗺️</div>
-        <h2>No itinerary yet</h2>
-        <p>${authed ? "Add the first day, or generate one with AI." : "Ask the organizer to add a plan."}</p>
+        <h2>${esc(t("trip.empty.title", "No itinerary yet"))}</h2>
+        <p>${authed ? esc(t("trip.empty.authed", "Add the first day, or generate one with AI.")) : esc(t("trip.empty.public", "Ask the organizer to add a plan."))}</p>
         ${authed ? profileSummaryHtml() : goodToKnowHtml()}
         <div class="empty-cta">
-          ${admin && aiEnabled ? `<button class="solid-btn" id="emptyAi">✨ Generate with AI</button>` : ""}
-          <button class="eb-btn" id="emptyAdd">＋ Add the first day</button>
+          ${admin && aiEnabled ? `<button class="solid-btn" id="emptyAi">✨ ${esc(t("trip.empty.generateAi", "Generate with AI"))}</button>` : ""}
+          <button class="eb-btn" id="emptyAdd">＋ ${esc(t("trip.empty.addFirstDay", "Add the first day"))}</button>
         </div>
       </div>`;
       const ea = $("#emptyAdd"); if (ea) ea.addEventListener("click", () => requireAuth(() => openDay(null)));
@@ -523,10 +538,10 @@
       const tl = computeDayTimeline(days()[di]);
       const cards = days()[di].stops.map((_, si) => stopCard(di, si, gi++, tl)).join("");
       html += `<section class="day-group">${dayHead(di, tl)}<ol class="timeline">${cards}</ol>
-        ${editing ? `<button class="eb-btn add-stop" data-act="addstop" data-di="${di}">＋ Add stop</button>` : ""}</section>`;
+        ${editing ? `<button class="eb-btn add-stop" data-act="addstop" data-di="${di}">＋ ${esc(t("trip.stop.addTitle", "Add stop"))}</button>` : ""}</section>`;
     });
     if (authed) html += tripBudgetHtml();
-    if (editing) html += `<button class="eb-btn add-day" data-act="addday">＋ Add day</button>`;
+    if (editing) html += `<button class="eb-btn add-day" data-act="addday">＋ ${esc(t("trip.day.addTitle", "Add day"))}</button>`;
     inner.innerHTML = html;
 
     inner.querySelectorAll(".stop").forEach((b) => b.addEventListener("click", () => activateStop(Number(b.dataset.idx), "sheet")));
@@ -548,9 +563,9 @@
     if (!planned && !hasActual && !target) return "";
     const over = target && planned > target;
     const pct = target ? Math.min(100, Math.round(planned / target * 100)) : (planned ? 100 : 0);
-    const targetTxt = target ? ` / ${moneyRp(target)} planned` : " planned";
-    const actualTxt = hasActual ? `<span class="bg-actual">actual ${moneyRp(actual)}</span>` : "";
-    return `<div class="trip-budget"><span class="tb-label">Trip budget</span>
+    const targetTxt = target ? ` / ${t("trip.budget.ofTarget", "{amt} planned", { amt: moneyRp(target) })}` : " " + t("trip.budget.planned", "planned");
+    const actualTxt = hasActual ? `<span class="bg-actual">${esc(t("trip.budget.actual", "actual {amt}", { amt: moneyRp(actual) }))}</span>` : "";
+    return `<div class="trip-budget"><span class="tb-label">${esc(t("trip.budget.tripBudget", "Trip budget"))}</span>
       <div class="budget-gauge${over ? " over" : ""}">
         <div class="bg-bar"><span style="width:${pct}%"></span></div>
         <div class="bg-label"><span class="bg-planned">${moneyRp(planned)}${targetTxt}</span>${actualTxt}</div>
@@ -585,12 +600,12 @@
     const nextS = nn.next >= 0 ? day.stops[nn.next] : null;
     let main, sub = "";
     if (curS) {
-      main = `<span class="ns-kicker">Now</span><span class="ns-name">${esc(curS.name)}</span>`;
-      if (nextS) { const inMin = Math.max(0, Math.round((nn.tl.rows[nn.next].arrival) - nn.mins)); sub = `<span class="ns-next">next: ${esc(nextS.name)} · in ${fmtDuration(inMin) || "now"}</span>`; }
+      main = `<span class="ns-kicker">${esc(t("trip.now.now", "Now"))}</span><span class="ns-name">${esc(curS.name)}</span>`;
+      if (nextS) { const inMin = Math.max(0, Math.round((nn.tl.rows[nn.next].arrival) - nn.mins)); sub = `<span class="ns-next">${esc(t("trip.now.nextName", "next: {name} · in {dur}", { name: nextS.name, dur: fmtDuration(inMin) || t("trip.now.now2", "now") }))}</span>`; }
     } else if (nextS) {
       const inMin = Math.max(0, Math.round((nn.tl.rows[nn.next].arrival) - nn.mins));
-      main = `<span class="ns-kicker">Up next</span><span class="ns-name">${esc(nextS.name)}</span>`;
-      sub = `<span class="ns-next">in ${fmtDuration(inMin) || "now"}</span>`;
+      main = `<span class="ns-kicker">${esc(t("trip.now.upNext", "Up next"))}</span><span class="ns-name">${esc(nextS.name)}</span>`;
+      sub = `<span class="ns-next">${esc(t("trip.now.in", "in {dur}", { dur: fmtDuration(inMin) || t("trip.now.now2", "now") }))}</span>`;
     } else return "";
     return `<div class="now-strip" data-di="${nn.di}" data-cur="${nn.cur}" data-next="${nn.next}"><div class="ns-main">${main}</div>${sub}</div>`;
   }
@@ -651,8 +666,8 @@
     const tabs = $("#tabs");
     const dayTabs = days().map((d, i) => `
       <button class="tab" role="tab" data-idx="${i}" aria-selected="${i === currentDay}" style="--tab-color:${dayColor(i)}">
-        <span class="dot"></span>${esc(d.label || "Day " + (i + 1))}</button>`).join("");
-    const allTab = days().length > 1 ? `<button class="tab tab-all" role="tab" data-idx="all" aria-selected="${currentDay === "all"}" style="--tab-color:${ALL_COLOR}"><span class="dot dot-all"></span>All</button>` : "";
+        <span class="dot"></span>${esc(d.label || t("trip.day.dayN", "Day {n}", { n: i + 1 }))}</button>`).join("");
+    const allTab = days().length > 1 ? `<button class="tab tab-all" role="tab" data-idx="all" aria-selected="${currentDay === "all"}" style="--tab-color:${ALL_COLOR}"><span class="dot dot-all"></span>${esc(t("trip.tabs.all", "All"))}</button>` : "";
     tabs.innerHTML = dayTabs + allTab;
     tabs.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => selectDay(b.dataset.idx === "all" ? "all" : Number(b.dataset.idx))));
   }
@@ -668,9 +683,9 @@
 
   // ---------- render all ----------
   function renderAll() {
-    $("#brand-title").textContent = (data && data.trip && data.trip.name) || itin.title || "Itinerary";
-    { const eb = $("#brand-eyebrow"); const t = (itin.title && data && data.trip && itin.title !== data.trip.name) ? itin.title : ""; eb.textContent = t; eb.hidden = !t; }
-    $("#trip-chip").textContent = days().length ? `${days().length} day${days().length > 1 ? "s" : ""}` : "";
+    $("#brand-title").textContent = (data && data.trip && data.trip.name) || itin.title || t("trip.brand.itinerary", "Itinerary");
+    { const eb = $("#brand-eyebrow"); const txt = (itin.title && data && data.trip && itin.title !== data.trip.name) ? itin.title : ""; eb.textContent = txt; eb.hidden = !txt; }
+    $("#trip-chip").textContent = days().length ? (days().length > 1 ? t("trip.chip.days", "{n} days", { n: days().length }) : t("trip.chip.day", "{n} day", { n: days().length })) : "";
     const bl = $("#bills-link"); if (bl && tripId) bl.href = "/split/?t=" + encodeURIComponent(tripId);
     if (typeof currentDay === "number" && !days()[currentDay]) currentDay = days().length ? 0 : "all";
     buildTabs(); selectDay(currentDay, true);
@@ -678,7 +693,7 @@
   }
   function applyAuthUI() {
     document.body.classList.toggle("is-editing", editing);
-    $("#editToggle").textContent = editing ? "Done" : "Edit";
+    $("#editToggle").textContent = editing ? t("common.done", "Done") : t("common.edit", "Edit");
     $("#editToggle").setAttribute("aria-pressed", editing ? "true" : "false");
     document.querySelectorAll(".admin-only").forEach((el) => { el.hidden = !admin; });
     $("#profileBtn").hidden = !(authed && editing);
@@ -691,7 +706,7 @@
   async function saveItin(optimisticMsg) {
     try { await api(`/trips/${tripId}/itinerary`, { method: "PUT", body: { title: itin.title || "", days: itin.days } });
       if (optimisticMsg) toast(optimisticMsg); await reload(true); }
-    catch (e) { toast(e.code === 401 ? "Enter the passcode to edit" : "Save failed", "err"); if (e.code === 401) { authed = false; showLock(); } reload(true); }
+    catch (e) { toast(e.code === 401 ? t("trip.toast.enterPasscode", "Enter the passcode to edit") : t("trip.toast.saveFailed", "Save failed"), "err"); if (e.code === 401) { authed = false; showLock(); } reload(true); }
   }
   function onEditAct(act, di, si) {
     if (act === "done") return toggleDone(di, si);
@@ -708,18 +723,23 @@
   function toggleDone(di, si) {
     if (!authed) return requireAuth(() => toggleDone(di, si));
     const s = days()[di].stops[si]; s.done = !s.done;
-    renderSheet(); renderMap(); saveItin(s.done ? "Marked done" : "Marked not done");
+    renderSheet(); renderMap(); saveItin(s.done ? t("trip.toast.markedDone", "Marked done") : t("trip.toast.markedNotDone", "Marked not done"));
   }
   function moveDay(di, d) { const a = days(); const j = di + d; if (j < 0 || j >= a.length) return; [a[di], a[j]] = [a[j], a[di]]; currentDay = j; renderAll(); saveItin(); }
 
   // stop dialog
   const stopDlg = $("#stopDialog"); let stopEdit = null, stopPrefill = null, pickMode = false;
   // build the Type <select> from the TYPE catalogue so labels never drift from the map
-  $("#stType").innerHTML = Object.keys(TYPE).map((k) => `<option value="${k}">${TYPE[k].icon} ${esc(TYPE[k].label)}</option>`).join("");
-  $("#stMode").innerHTML = Object.keys(MODES).map((k) => `<option value="${k}">${MODES[k].icon} ${MODES[k].label}</option>`).join("");
+  function buildStopSelects() {
+    const tv = $("#stType").value, mv = $("#stMode").value;
+    $("#stType").innerHTML = Object.keys(TYPE).map((k) => `<option value="${k}">${TYPE[k].icon} ${esc(typeLabel(k))}</option>`).join("");
+    $("#stMode").innerHTML = Object.keys(MODES).map((k) => `<option value="${k}">${MODES[k].icon} ${esc(modeLabel(k))}</option>`).join("");
+    if (tv) $("#stType").value = tv; if (mv) $("#stMode").value = mv;
+  }
+  buildStopSelects();
   function setCoords(c) {
     $("#stLat").value = c ? c.lat : ""; $("#stLng").value = c ? c.lng : "";
-    const el = $("#stCoords"); el.textContent = c ? `📍 ${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}` : "No pin yet"; el.classList.toggle("set", !!c);
+    const el = $("#stCoords"); el.textContent = c ? `📍 ${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}` : t("trip.stop.noPin", "No pin yet"); el.classList.toggle("set", !!c);
   }
   // pull lat,lng out of a pasted Google/Apple Maps link or a raw "lat, lng"
   function parseCoords(s) {
@@ -742,7 +762,7 @@
     stopEdit = { di, si };
     const s = prefill || (si != null ? days()[di].stops[si] : {});
     const lk = s.links || {};
-    $("#stopTitle").textContent = si != null ? "Edit stop" : "Add stop";
+    $("#stopTitle").textContent = si != null ? t("trip.stop.editTitle", "Edit stop") : t("trip.stop.addTitle", "Add stop");
     $("#stName").value = s.name || ""; $("#stType").value = s.type || "activity"; $("#stMode").value = s.mode || "car";
     $("#stTime").value = s.time || ""; $("#stUrl").value = lk.maps || s.url || "";
     $("#stLinkBooking").value = lk.booking || ""; $("#stLinkTickets").value = lk.tickets || "";
@@ -755,7 +775,7 @@
   $("#stPlace").addEventListener("input", () => { const c = parseCoords($("#stPlace").value); if (c) setCoords(c); });
   $("#stPick").addEventListener("click", () => {
     stopPrefill = captureStop(); stopDlg.close();
-    pickMode = true; document.body.classList.add("picking"); toast("Tap the map to place the pin");
+    pickMode = true; document.body.classList.add("picking"); toast(t("trip.toast.tapToPin", "Tap the map to place the pin"));
   });
   map.on("click", (e) => {
     if (!pickMode) return;
@@ -766,15 +786,15 @@
   $("#stCancel").addEventListener("click", () => stopDlg.close());
   stopDlg.addEventListener("cancel", (e) => { e.preventDefault(); stopDlg.close(); });
   $("#stDelete").addEventListener("click", async () => {
-    const { di, si } = stopEdit; const nm = (days()[di].stops[si] && days()[di].stops[si].name) || "this stop";
+    const { di, si } = stopEdit; const nm = (days()[di].stops[si] && days()[di].stops[si].name) || t("trip.stop.thisStop", "this stop");
     stopDlg.close();
-    if (!(await confirmAsk("Delete stop?", `“${nm}” will be removed from the day.`, "Delete", true))) return;
-    days()[di].stops.splice(si, 1); renderSheet(); renderMap(); saveItin("Stop removed");
+    if (!(await confirmAsk(t("trip.stop.deleteConfirmTitle", "Delete stop?"), t("trip.stop.deleteConfirmBody", "“{name}” will be removed from the day.", { name: nm }), t("common.delete", "Delete"), true))) return;
+    days()[di].stops.splice(si, 1); renderSheet(); renderMap(); saveItin(t("trip.toast.stopRemoved", "Stop removed"));
   });
   $("#stopForm").addEventListener("submit", (e) => {
     e.preventDefault();
     const name = $("#stName").value.trim();
-    if (!name) { $("#stErr").textContent = "Name is required"; $("#stErr").hidden = false; $("#stName").focus(); return; }
+    if (!name) { $("#stErr").textContent = t("trip.stop.nameRequired", "Name is required"); $("#stErr").hidden = false; $("#stName").focus(); return; }
     const lat = parseFloat($("#stLat").value), lng = parseFloat($("#stLng").value);
     const mapsUrl = $("#stUrl").value.trim();
     const links = { maps: mapsUrl, booking: $("#stLinkBooking").value.trim(), tickets: $("#stLinkTickets").value.trim() };
@@ -784,7 +804,7 @@
     const { di, si } = stopEdit;
     if (si != null) { const o = days()[di].stops[si]; s.id = o.id; s.linkedExpenseId = o.linkedExpenseId; s.done = o.done; s.cost = o.cost; days()[di].stops[si] = s; }
     else days()[di].stops.push(s);
-    stopDlg.close(); renderSheet(); renderMap(); saveItin("Saved");
+    stopDlg.close(); renderSheet(); renderMap(); saveItin(t("common.saved", "Saved"));
   });
 
   // day dialog
@@ -792,7 +812,7 @@
   function openDay(di) {
     dayEdit = di;
     const d = di != null ? days()[di] : {};
-    $("#dayTitle").textContent = di != null ? "Edit day" : "Add day";
+    $("#dayTitle").textContent = di != null ? t("trip.day.editTitle", "Edit day") : t("trip.day.addTitle", "Add day");
     $("#dyTitle").value = d.title || ""; $("#dyLabel").value = d.label || ""; $("#dyDate").value = d.dateLabel || "";
     $("#dyDelete").hidden = di == null;
     dayDlg.showModal(); setTimeout(() => $("#dyTitle").focus(), 30);
@@ -801,24 +821,26 @@
   dayDlg.addEventListener("cancel", (e) => { e.preventDefault(); dayDlg.close(); });
   $("#dyDelete").addEventListener("click", async () => {
     if (dayEdit == null) return;
-    const d = itin.days[dayEdit]; const nm = (d && (d.title || d.label)) || "this day"; const n = (d && d.stops) ? d.stops.length : 0;
+    const d = itin.days[dayEdit]; const nm = (d && (d.title || d.label)) || t("trip.day.thisDay", "this day"); const n = (d && d.stops) ? d.stops.length : 0;
     dayDlg.close();
-    if (!(await confirmAsk("Delete day?", `“${nm}”${n ? ` and its ${n} stop${n > 1 ? "s" : ""}` : ""} will be removed.`, "Delete", true))) return;
-    itin.days.splice(dayEdit, 1); currentDay = itin.days.length ? 0 : "all"; renderAll(); saveItin("Day removed");
+    const stopsClause = n ? (n > 1 ? t("trip.day.andItsStops", " and its {n} stops", { n }) : t("trip.day.andItsStop", " and its {n} stop", { n })) : "";
+    if (!(await confirmAsk(t("trip.day.deleteConfirmTitle", "Delete day?"), t("trip.day.deleteConfirmBody", "“{name}”{stops} will be removed.", { name: nm, stops: stopsClause }), t("common.delete", "Delete"), true))) return;
+    itin.days.splice(dayEdit, 1); currentDay = itin.days.length ? 0 : "all"; renderAll(); saveItin(t("trip.toast.dayRemoved", "Day removed"));
   });
   $("#dayForm").addEventListener("submit", (e) => {
     e.preventDefault();
     const title = $("#dyTitle").value.trim(); if (!title) return;
-    const d = { label: $("#dyLabel").value.trim() || ("Day " + ((dayEdit != null ? dayEdit : itin.days.length) + 1)), dateLabel: $("#dyDate").value.trim(), title };
+    const d = { label: $("#dyLabel").value.trim() || t("trip.day.dayN", "Day {n}", { n: (dayEdit != null ? dayEdit : itin.days.length) + 1 }), dateLabel: $("#dyDate").value.trim(), title };
     if (dayEdit != null) { d.id = itin.days[dayEdit].id; d.stops = itin.days[dayEdit].stops; itin.days[dayEdit] = d; }
     else { d.stops = []; itin.days.push(d); currentDay = itin.days.length - 1; }
-    dayDlg.close(); renderAll(); saveItin("Saved");
+    dayDlg.close(); renderAll(); saveItin(t("common.saved", "Saved"));
   });
 
   // trip profile dialog
   const profileDlg = $("#profileDialog");
   // build dietary chips from the vocab
-  $("#pfDietary").innerHTML = DIET_OPTS.map((k) => `<button type="button" class="chip" data-diet="${k}">${esc(DIET_LABEL[k] || k)}</button>`).join("");
+  function buildDietChips() { $("#pfDietary").innerHTML = DIET_OPTS.map((k) => `<button type="button" class="chip" data-diet="${k}">${esc(dietLabel(k))}</button>`).join(""); }
+  buildDietChips();
   $("#pfDietary").addEventListener("click", (e) => { const b = e.target.closest(".chip"); if (b) b.classList.toggle("on"); });
   function openProfile() {
     requireAuth(async () => {
@@ -856,16 +878,16 @@
     const go = $("#pfSave"); go.disabled = true;
     try {
       fullDoc = await api(`/trips/${tripId}/profile`, { method: "PUT", body });
-      profileDlg.close(); _dateFmt = null; await reload(true); toast("Trip profile saved");
+      profileDlg.close(); _dateFmt = null; await reload(true); toast(t("trip.toast.profileSaved", "Trip profile saved"));
     } catch (err) {
-      $("#pfErr").textContent = err.code === 401 ? "Enter the passcode to edit" : "Save failed"; $("#pfErr").hidden = false;
+      $("#pfErr").textContent = err.code === 401 ? t("trip.toast.enterPasscode", "Enter the passcode to edit") : t("trip.toast.saveFailed", "Save failed"); $("#pfErr").hidden = false;
       if (err.code === 401) { authed = false; profileDlg.close(); showLock(); }
     } finally { go.disabled = false; }
   });
 
   // ---------- share ----------
   function shareTrip(di) {
-    const name = (data && data.trip && data.trip.name) || itin.title || "Our trip";
+    const name = (data && data.trip && data.trip.name) || itin.title || t("trip.share.ourTrip", "Our trip");
     const n = days().length;
     let url = location.origin + location.pathname + location.search;
     let text = name;
@@ -873,10 +895,10 @@
     if (di != null && days()[di]) {
       const d = days()[di];
       url += "#day" + (di + 1);
-      text = `${name} — ${d.title || d.label || "Day " + (di + 1)}`;
+      text = `${name} — ${d.title || d.label || t("trip.day.dayN", "Day {n}", { n: di + 1 })}`;
     } else {
       const parts = [];
-      if (n) parts.push(`${n} day${n > 1 ? "s" : ""}`);
+      if (n) parts.push(n > 1 ? t("trip.chip.days", "{n} days", { n }) : t("trip.chip.day", "{n} day", { n }));
       if (dates) parts.push(dates);
       if (parts.length) text += " · " + parts.join(" · ");
     }
@@ -884,14 +906,14 @@
     if (navigator.share) { navigator.share(payload).catch(() => {}); return; }
     const copy = `${text}\n${url}`;
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(copy).then(() => toast("Link copied"), () => toast("Couldn't copy", "err"));
+      navigator.clipboard.writeText(copy).then(() => toast(t("trip.toast.linkCopied", "Link copied")), () => toast(t("trip.toast.copyFailed", "Couldn't copy"), "err"));
     } else { toast(copy); }
   }
   $("#shareBtn").addEventListener("click", () => shareTrip(null));
 
   // edit toggle + login
   $("#editToggle").addEventListener("click", () => { if (!editing) return requireAuth(() => { editing = true; renderAll(); }); editing = false; renderAll(); });
-  $("#logoutBtn").addEventListener("click", async () => { try { await api("/logout", { method: "POST" }); } catch (_) {} admin = false; applyAuthUI(); toast("Logged out"); });
+  $("#logoutBtn").addEventListener("click", async () => { try { await api("/logout", { method: "POST" }); } catch (_) {} admin = false; applyAuthUI(); toast(t("trip.toast.loggedOut", "Logged out")); });
 
   // ---------- cost link ----------
   const costDlg = $("#costDialog"); let costEdit = null;
@@ -900,7 +922,7 @@
       if (!fullDoc) { try { fullDoc = await api(`/trips/${tripId}`); } catch (_) {} }
       costEdit = { di, si };
       const stop = days()[di].stops[si];
-      const sel = $("#costSelect"); sel.innerHTML = `<option value="">— none —</option>`;
+      const sel = $("#costSelect"); sel.innerHTML = `<option value="">${esc(t("trip.cost.none", "— none —"))}</option>`;
       (fullDoc ? fullDoc.expenses || [] : []).forEach((e) => { const o = document.createElement("option"); o.value = e.id; o.textContent = `${e.title} · Rp ${Number(e.amount).toLocaleString("en-US")}`; sel.appendChild(o); });
       (fullDoc ? fullDoc.receipts || [] : []).forEach((r) => { const o = document.createElement("option"); o.value = r.id; o.textContent = `${r.title} · Rp ${Number(r.grandTotal).toLocaleString("en-US")}`; sel.appendChild(o); });
       sel.value = stop.linkedExpenseId || ""; $("#costAmount").value = ""; $("#costErr").hidden = true;
@@ -910,7 +932,7 @@
   }
   $("#costCancel").addEventListener("click", () => costDlg.close());
   costDlg.addEventListener("cancel", (e) => { e.preventDefault(); costDlg.close(); });
-  $("#costUnlink").addEventListener("click", () => { const { di, si } = costEdit; days()[di].stops[si].linkedExpenseId = ""; costDlg.close(); renderSheet(); saveItin("Unlinked"); });
+  $("#costUnlink").addEventListener("click", () => { const { di, si } = costEdit; days()[di].stops[si].linkedExpenseId = ""; costDlg.close(); renderSheet(); saveItin(t("trip.toast.unlinked", "Unlinked")); });
   $("#costForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const { di, si } = costEdit; const stop = days()[di].stops[si];
@@ -925,8 +947,8 @@
         fullDoc = out; linkId = out.expenses[out.expenses.length - 1].id;
       }
       stop.linkedExpenseId = linkId || "";
-      costDlg.close(); renderSheet(); saveItin("Cost linked");
-    } catch (err) { $("#costErr").textContent = err.code === 401 ? "Passcode needed" : "Couldn't link"; $("#costErr").hidden = false; }
+      costDlg.close(); renderSheet(); saveItin(t("trip.toast.costLinked", "Cost linked"));
+    } catch (err) { $("#costErr").textContent = err.code === 401 ? t("trip.cost.passcodeNeeded", "Passcode needed") : t("trip.cost.couldntLink", "Couldn't link"); $("#costErr").hidden = false; }
   });
 
   // ---------- AI generate ----------
@@ -947,14 +969,14 @@
   $("#aiForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const dest = $("#aiDest").value.trim(); if (!dest) return;
-    const go = $("#aiGo"); go.disabled = true; spin(true, "Drafting your itinerary…");
+    const go = $("#aiGo"); go.disabled = true; spin(true, t("trip.ai.drafting", "Drafting your itinerary…"));
     try {
       const out = await api(`/trips/${tripId}/itinerary/generate`, { method: "POST", body: { destination: dest, days: parseInt($("#aiDays").value, 10) || 3, notes: $("#aiNotes").value.trim() } });
       draft = out.draft; aiDlg.close();
       itin = JSON.parse(JSON.stringify(draft)); currentDay = 0; editing = false; renderAll();
       $("#draftBanner").hidden = false;
     } catch (err) {
-      $("#aiErr").textContent = err.code === 503 ? "AI isn't configured on the server." : err.code === 504 ? "Timed out — try again." : err.code === 401 ? "Log in as admin." : "Generation failed.";
+      $("#aiErr").textContent = err.code === 503 ? t("trip.ai.errNotConfigured", "AI isn't configured on the server.") : err.code === 504 ? t("trip.ai.errTimeout", "Timed out — try again.") : err.code === 401 ? t("trip.ai.errAdmin", "Log in as admin.") : t("trip.ai.errFailed", "Generation failed.");
       $("#aiErr").hidden = false;
     } finally { go.disabled = false; spin(false); }
   });
@@ -962,19 +984,19 @@
   $("#draftDiscard").addEventListener("click", () => { endDraft(); reload(true); });
   $("#draftRegen").addEventListener("click", () => { endDraft(); $("#aiBtn").click(); });
   $("#draftReplace").addEventListener("click", async () => {
-    if (!(await confirmAsk("Replace itinerary?", "This overwrites the entire saved plan with the AI draft.", "Replace", true))) return;
-    itin = JSON.parse(JSON.stringify(draft)); endDraft(); await saveItin("Itinerary saved");
+    if (!(await confirmAsk(t("trip.draft.replaceConfirmTitle", "Replace itinerary?"), t("trip.draft.replaceConfirmBody", "This overwrites the entire saved plan with the AI draft."), t("trip.draft.replace", "Replace"), true))) return;
+    itin = JSON.parse(JSON.stringify(draft)); endDraft(); await saveItin(t("trip.toast.itinSaved", "Itinerary saved"));
   });
   $("#draftAppend").addEventListener("click", async () => {
     try { const cur = await api(`/trips/${tripId}/itinerary`); const base = (cur && cur.itinerary) || { title: "", days: [] };
       base.days = (base.days || []).concat(draft.days); if (!base.title) base.title = draft.title;
-      itin = base; endDraft(); await saveItin("Days appended"); } catch (_) { toast("Append failed", "err"); }
+      itin = base; endDraft(); await saveItin(t("trip.toast.daysAppended", "Days appended")); } catch (_) { toast(t("trip.toast.appendFailed", "Append failed"), "err"); }
   });
 
   // ---------- confirm ----------
   const cfDlg = $("#confirmDialog"); let cfResolve = null;
   function confirmAsk(title, body, okLabel, danger) {
-    return new Promise((res) => { cfResolve = res; $("#cfTitle").textContent = title; $("#cfBody").textContent = body || ""; const ok = $("#cfOk"); ok.textContent = okLabel || "Confirm"; ok.classList.toggle("danger", !!danger); cfDlg.showModal(); });
+    return new Promise((res) => { cfResolve = res; $("#cfTitle").textContent = title; $("#cfBody").textContent = body || ""; const ok = $("#cfOk"); ok.textContent = okLabel || t("common.confirm", "Confirm"); ok.classList.toggle("danger", !!danger); cfDlg.showModal(); });
   }
   $("#cfOk").addEventListener("click", () => { cfDlg.close(); if (cfResolve) cfResolve(true); cfResolve = null; });
   $("#cfCancel").addEventListener("click", () => { cfDlg.close(); if (cfResolve) cfResolve(false); cfResolve = null; });
@@ -995,7 +1017,7 @@
       const fn = lockIntent; lockIntent = null; if (typeof fn === "function") fn();
     } catch (err) {
       pass = ""; const c = $("#lockForm"); c.classList.remove("shake"); void c.offsetWidth; c.classList.add("shake");
-      $("#lockErr").textContent = "Wrong passcode"; $("#lockInput").select();
+      $("#lockErr").textContent = t("trip.lock.wrong", "Wrong passcode"); $("#lockInput").select();
     }
   });
 
@@ -1021,7 +1043,7 @@
       meMarker = L.marker(ll, { icon: L.divIcon({ className: "me-wrap", html: `<div class="me-dot"></div>`, iconSize: [18, 18], iconAnchor: [9, 9] }), interactive: false }).addTo(locLayer);
       map.flyTo(ll, Math.max(map.getZoom(), 14), { duration: 0.8 }); } else { meMarker.setLatLng(ll); meCircle.setLatLng(ll).setRadius(acc); }
     $("#locate").classList.add("on"); }
-  $("#locate").addEventListener("click", () => { if (!navigator.geolocation) return; if (meMarker) return map.flyTo(meMarker.getLatLng(), 15, { duration: 0.6 }); navigator.geolocation.getCurrentPosition(onPos, () => toast("Couldn't get your location", "err"), { enableHighAccuracy: true, timeout: 12000 }); });
+  $("#locate").addEventListener("click", () => { if (!navigator.geolocation) return; if (meMarker) return map.flyTo(meMarker.getLatLng(), 15, { duration: 0.6 }); navigator.geolocation.getCurrentPosition(onPos, () => toast(t("trip.toast.locationFailed", "Couldn't get your location"), "err"), { enableHighAccuracy: true, timeout: 12000 }); });
   $("#recenter").addEventListener("click", () => fitView(true));
   let rT; window.addEventListener("resize", () => { clearTimeout(rT); rT = setTimeout(() => { map.invalidateSize(); if (window.innerWidth < 860) setSheetState(sheet.dataset.state || "peek"); fitView(false); }, 150); });
 
@@ -1034,7 +1056,7 @@
   }
   async function reload(silent) {
     try { const d = await api(`/trips/${tripId}/itinerary`); adopt(d); if (!silent) {} renderAll(); }
-    catch (e) { if (!silent) $("#sheet-inner").innerHTML = `<div class="empty-itin"><p>Couldn't load this trip.</p></div>`; }
+    catch (e) { if (!silent) $("#sheet-inner").innerHTML = `<div class="empty-itin"><p>${esc(t("trip.empty.loadFailed", "Couldn't load this trip."))}</p></div>`; }
   }
   function startDayFromHash() { if (/#all/i.test(location.hash)) return "all"; const m = (location.hash || "").match(/day(\d+)/i); return m ? Math.max(0, Number(m[1]) - 1) : 0; }
   // with no #hash, land on today's day when today is within the trip's date range
@@ -1059,7 +1081,7 @@
       startNowTicker();
       if (!location.hash && todayDayIndex() >= 0) setTimeout(scrollToNow, 600);
     } catch (e) {
-      $("#sheet-inner").innerHTML = `<div class="empty-itin"><div class="empty-emoji">🗺️</div><h2>Trip not found</h2><p>Check the link, or go to <a href="/">Tripkit</a>.</p></div>`;
+      $("#sheet-inner").innerHTML = `<div class="empty-itin"><div class="empty-emoji">🗺️</div><h2>${esc(t("trip.empty.notFoundTitle", "Trip not found"))}</h2><p>${t("trip.empty.notFoundBody", "Check the link, or go to {link}.", { link: '<a href="/">Tripkit</a>' })}</p></div>`;
       setSheetState("peek");
     }
     setInterval(async () => {
@@ -1068,5 +1090,14 @@
     }, 6000);
   }
   window.addEventListener("hashchange", () => { const h = startDayFromHash(); if (h !== currentDay) selectDay(h); });
+
+  // ---------- i18n: mount switcher + live re-render ----------
+  { const host = $("#lang-host"); if (host && window.I18N && I18N.mount) I18N.mount(host); }
+  window.addEventListener("i18n:change", () => {
+    // rebuild dialog selects/chips only while their dialogs are closed (avoids wiping in-progress edits)
+    if (!stopDlg.open) buildStopSelects();
+    if (!profileDlg.open) buildDietChips();
+    if (data || itin) renderAll();
+  });
   boot();
 })();

@@ -106,6 +106,22 @@ h1,h2,h3 { font-family: var(--display); font-weight: 700; margin: 0; letter-spac
 .receipt__name { font-size: 1.18rem; }
 .receipt__meta { font-family: var(--mono); font-size: .72rem; color: var(--faint); margin-top: 4px; }
 .receipt__totals { text-align: right; white-space: nowrap; }
+
+/* collapsible cards (progressive disclosure — fold a finished receipt/cost) */
+.expense__head > :first-child, .receipt__head > :first-child { flex: 1 1 auto; min-width: 0; }
+.card-tools { display: flex; align-items: center; gap: 6px; flex: none; }
+.card-status { font-family: var(--mono); font-size: .62rem; letter-spacing: .04em; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line-soft); color: var(--faint); white-space: nowrap; }
+.card-status.done { color: var(--good); border-color: color-mix(in srgb, var(--good) 42%, var(--line)); }
+.card-collapse { appearance: none; background: transparent; border: 0; color: var(--muted); cursor: pointer; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 10px; flex: none; }
+.card-collapse:hover { color: var(--text); }
+.card-collapse:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.card-collapse .chev { font-size: 1rem; transition: transform .2s ease; }
+.is-collapsed .card-collapse .chev { transform: rotate(-90deg); }
+.card-body { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .28s ease; }
+.is-collapsed > .card-body { grid-template-rows: 0fr; }
+.card-body-inner { overflow: hidden; min-height: 0; }
+.receipt.is-collapsed .receipt__head { border-bottom-color: transparent; }
+@media (prefers-reduced-motion: reduce) { .card-body, .card-collapse .chev { transition: none; } }
 .receipt__grand { font-family: var(--mono); font-size: 1.02rem; color: var(--text); }
 .payer { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; font-size: .72rem; color: var(--muted); }
 .payer b { color: var(--text); }

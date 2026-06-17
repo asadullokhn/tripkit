@@ -22,18 +22,19 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <link rel="stylesheet" href="/shared/tokens.css?v=1" />
-  <link rel="stylesheet" href="styles.css?v=20260617i" />
+  <link rel="stylesheet" href="styles.css?v=20260617j" />
+  <script src="/shared/i18n.js?v=1"></script>
 </head>
 <body>
   <!-- passcode gate -->
   <div class="lock" id="lock" hidden>
     <form class="lock__card" id="lockForm">
       <span class="lock__kicker">Tripkit · Itinerary</span>
-      <h2 class="lock__title">Enter passcode</h2>
+      <h2 class="lock__title" data-i18n="trip.lock.title">Enter passcode</h2>
       <input id="lockInput" class="lock__input" type="password" inputmode="numeric"
-             pattern="[0-9]*" maxlength="32" autocomplete="off" placeholder="••••" aria-label="Passcode" />
+             pattern="[0-9]*" maxlength="32" autocomplete="off" placeholder="••••" aria-label="Passcode" data-i18n-al="trip.lock.passcodeAria" />
       <p class="lock__err" id="lockErr" role="alert"></p>
-      <button type="submit" class="solid-btn">Unlock</button>
+      <button type="submit" class="solid-btn" data-i18n="trip.lock.unlock">Unlock</button>
     </form>
   </div>
 
@@ -46,25 +47,26 @@
     <header class="topbar">
       <div class="brand">
         <div class="brand-row">
-          <a class="home-link" href="/">← Tripkit</a>
-          <a class="bills-link" id="bills-link" href="/split/">💸 Bills</a>
+          <a class="home-link" href="/"><span data-i18n="trip.brand.home">← Tripkit</span></a>
+          <a class="bills-link" id="bills-link" href="/split/"><span data-i18n="trip.brand.bills">💸 Bills</span></a>
         </div>
         <span class="brand-eyebrow" id="brand-eyebrow">Itinerary</span>
         <h1 class="brand-title" id="brand-title">Itinerary</h1>
       </div>
       <div class="trip-chip" id="trip-chip"></div>
-      <nav class="tabs" id="tabs" role="tablist" aria-label="Trip days"></nav>
+      <nav class="tabs" id="tabs" role="tablist" aria-label="Trip days" data-i18n-al="trip.tabs.aria"></nav>
       <div class="edit-bar" id="edit-bar">
-        <button class="eb-btn" id="shareBtn" type="button" title="Share this trip">↗ Share</button>
-        <button class="eb-btn" id="editToggle" type="button" aria-pressed="false">Edit</button>
-        <button class="eb-btn editing-only" id="profileBtn" type="button" hidden>⚙ Trip</button>
-        <button class="eb-btn admin-only" id="aiBtn" type="button" hidden>✨ AI</button>
-        <button class="eb-btn admin-only" id="logoutBtn" type="button" hidden>Log out</button>
+        <span class="lang-host" id="lang-host"></span>
+        <button class="eb-btn" id="shareBtn" type="button" title="Share this trip" data-i18n="trip.bar.share">↗ Share</button>
+        <button class="eb-btn" id="editToggle" type="button" aria-pressed="false" data-i18n="common.edit">Edit</button>
+        <button class="eb-btn editing-only" id="profileBtn" type="button" hidden data-i18n="trip.bar.trip">⚙ Trip</button>
+        <button class="eb-btn admin-only" id="aiBtn" type="button" hidden data-i18n="trip.bar.ai">✨ AI</button>
+        <button class="eb-btn admin-only" id="logoutBtn" type="button" hidden data-i18n="trip.bar.logout">Log out</button>
       </div>
     </header>
 
     <!-- Locate me -->
-    <button class="locate" id="locate" aria-label="Show my current location">
+    <button class="locate" id="locate" aria-label="Show my current location" data-i18n-al="trip.map.locate">
       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
         <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0-6v3m0 14v3m10-10h-3M5 12H2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
         <circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"/>
@@ -72,18 +74,18 @@
     </button>
 
     <!-- Recenter button (fit the day's route) -->
-    <button class="recenter" id="recenter" aria-label="Fit the whole route in view">
+    <button class="recenter" id="recenter" aria-label="Fit the whole route in view" data-i18n-al="trip.map.recenter">
       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
         <path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
       </svg>
     </button>
 
     <!-- Bottom sheet: itinerary -->
-    <section class="sheet" id="sheet" data-state="peek" aria-label="Day itinerary">
-      <button class="sheet-grab" id="sheet-grab" aria-label="Expand or collapse itinerary">
+    <section class="sheet" id="sheet" data-state="peek" aria-label="Day itinerary" data-i18n-al="trip.sheet.aria">
+      <button class="sheet-grab" id="sheet-grab" aria-label="Expand or collapse itinerary" data-i18n-al="trip.sheet.grabAria">
         <span class="grab-bar"></span>
       </button>
-      <button class="sheet-hide" id="sheet-hide" aria-label="Hide itinerary to see the full map">
+      <button class="sheet-hide" id="sheet-hide" aria-label="Hide itinerary to see the full map" data-i18n-al="trip.sheet.hideAria">
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
       <div class="sheet-scroll" id="sheet-scroll">
@@ -94,46 +96,46 @@
 
   <!-- AI draft banner -->
   <div class="draft-banner" id="draftBanner" hidden>
-    <span>Reviewing AI draft — nothing saved yet.</span>
+    <span data-i18n="trip.draft.reviewing">Reviewing AI draft — nothing saved yet.</span>
     <div class="draft-actions">
-      <button class="eb-btn" id="draftRegen" type="button">Regenerate</button>
-      <button class="eb-btn" id="draftAppend" type="button">Append</button>
-      <button class="solid-btn solid-btn--sm" id="draftReplace" type="button">Replace</button>
-      <button class="eb-btn" id="draftDiscard" type="button">Discard</button>
+      <button class="eb-btn" id="draftRegen" type="button" data-i18n="trip.draft.regenerate">Regenerate</button>
+      <button class="eb-btn" id="draftAppend" type="button" data-i18n="trip.draft.append">Append</button>
+      <button class="solid-btn solid-btn--sm" id="draftReplace" type="button" data-i18n="trip.draft.replace">Replace</button>
+      <button class="eb-btn" id="draftDiscard" type="button" data-i18n="trip.draft.discard">Discard</button>
     </div>
   </div>
 
   <!-- stop dialog -->
   <dialog id="stopDialog" class="dlg" aria-labelledby="stopTitle">
     <form class="dlg__form" id="stopForm">
-      <h3 class="dlg__title" id="stopTitle">Add stop</h3>
-      <label class="fld"><span>Name</span><input id="stName" type="text" maxlength="80" required /></label>
+      <h3 class="dlg__title" id="stopTitle" data-i18n="trip.stop.addTitle">Add stop</h3>
+      <label class="fld"><span data-i18n="trip.stop.name">Name</span><input id="stName" type="text" maxlength="80" required /></label>
       <div class="fld-row">
-        <label class="fld"><span>Type</span><select id="stType"></select></label>
-        <label class="fld"><span>Arrive by</span><select id="stMode"></select></label>
+        <label class="fld"><span data-i18n="trip.stop.type">Type</span><select id="stType"></select></label>
+        <label class="fld"><span data-i18n="trip.stop.arriveBy">Arrive by</span><select id="stMode"></select></label>
       </div>
       <div class="fld-row">
-        <label class="fld"><span>Time</span><input id="stTime" type="text" maxlength="12" placeholder="08:30" /></label>
-        <label class="fld"><span>Visit (min)</span><input id="stDuration" type="number" min="0" step="5" inputmode="numeric" placeholder="0" /></label>
+        <label class="fld"><span data-i18n="trip.stop.time">Time</span><input id="stTime" type="text" maxlength="12" placeholder="08:30" /></label>
+        <label class="fld"><span data-i18n="trip.stop.visitMin">Visit (min)</span><input id="stDuration" type="number" min="0" step="5" inputmode="numeric" placeholder="0" /></label>
       </div>
-      <label class="fld"><span>Maps URL</span><input id="stUrl" type="url" placeholder="https://…" /></label>
+      <label class="fld"><span data-i18n="trip.stop.mapsUrl">Maps URL</span><input id="stUrl" type="url" placeholder="https://…" /></label>
       <div class="fld-row">
-        <label class="fld"><span>Booking link</span><input id="stLinkBooking" type="url" placeholder="https://…" /></label>
-        <label class="fld"><span>Tickets link</span><input id="stLinkTickets" type="url" placeholder="https://…" /></label>
+        <label class="fld"><span data-i18n="trip.stop.bookingLink">Booking link</span><input id="stLinkBooking" type="url" placeholder="https://…" /></label>
+        <label class="fld"><span data-i18n="trip.stop.ticketsLink">Tickets link</span><input id="stLinkTickets" type="url" placeholder="https://…" /></label>
       </div>
-      <label class="fld"><span>Note</span><textarea id="stNote" rows="2" maxlength="400"></textarea></label>
-      <label class="fld"><span>Location</span><input id="stPlace" type="text" placeholder="Paste a Google Maps link, or 'lat, lng'" /></label>
+      <label class="fld"><span data-i18n="trip.stop.note">Note</span><textarea id="stNote" rows="2" maxlength="400"></textarea></label>
+      <label class="fld"><span data-i18n="trip.stop.location">Location</span><input id="stPlace" type="text" placeholder="Paste a Google Maps link, or 'lat, lng'" data-i18n-ph="trip.stop.locationPh" /></label>
       <div class="fld-row fld-row--pick">
-        <button type="button" class="eb-btn" id="stPick">📍 Pick on map</button>
-        <span class="fld__hint" id="stCoords">No pin yet</span>
+        <button type="button" class="eb-btn" id="stPick" data-i18n="trip.stop.pickOnMap">📍 Pick on map</button>
+        <span class="fld__hint" id="stCoords" data-i18n="trip.stop.noPin">No pin yet</span>
       </div>
       <input id="stLat" type="hidden" /><input id="stLng" type="hidden" />
       <p class="fld__err" id="stErr" role="alert" hidden></p>
       <div class="dlg__actions">
-        <button type="button" class="eb-btn danger" id="stDelete" hidden>Delete</button>
+        <button type="button" class="eb-btn danger" id="stDelete" hidden data-i18n="common.delete">Delete</button>
         <span style="flex:1"></span>
-        <button type="button" class="eb-btn" id="stCancel">Cancel</button>
-        <button type="submit" class="solid-btn solid-btn--sm" id="stSave">Save</button>
+        <button type="button" class="eb-btn" id="stCancel" data-i18n="common.cancel">Cancel</button>
+        <button type="submit" class="solid-btn solid-btn--sm" id="stSave" data-i18n="common.save">Save</button>
       </div>
     </form>
   </dialog>
@@ -141,17 +143,17 @@
   <!-- day dialog -->
   <dialog id="dayDialog" class="dlg" aria-labelledby="dayTitle">
     <form class="dlg__form" id="dayForm">
-      <h3 class="dlg__title" id="dayTitle">Add day</h3>
-      <label class="fld"><span>Title</span><input id="dyTitle" type="text" maxlength="80" placeholder="e.g. Arrival → Old Town" required /></label>
+      <h3 class="dlg__title" id="dayTitle" data-i18n="trip.day.addTitle">Add day</h3>
+      <label class="fld"><span data-i18n="trip.day.title">Title</span><input id="dyTitle" type="text" maxlength="80" placeholder="e.g. Arrival → Old Town" data-i18n-ph="trip.day.titlePh" required /></label>
       <div class="fld-row">
-        <label class="fld"><span>Label</span><input id="dyLabel" type="text" maxlength="24" placeholder="Day 1" /></label>
-        <label class="fld"><span>Date</span><input id="dyDate" type="text" maxlength="24" placeholder="Sat 13 Jun" /></label>
+        <label class="fld"><span data-i18n="trip.day.label">Label</span><input id="dyLabel" type="text" maxlength="24" placeholder="Day 1" /></label>
+        <label class="fld"><span data-i18n="trip.day.date">Date</span><input id="dyDate" type="text" maxlength="24" placeholder="Sat 13 Jun" /></label>
       </div>
       <div class="dlg__actions">
-        <button type="button" class="eb-btn danger" id="dyDelete" hidden>Delete day</button>
+        <button type="button" class="eb-btn danger" id="dyDelete" hidden data-i18n="trip.day.deleteDay">Delete day</button>
         <span style="flex:1"></span>
-        <button type="button" class="eb-btn" id="dyCancel">Cancel</button>
-        <button type="submit" class="solid-btn solid-btn--sm" id="dySave">Save</button>
+        <button type="button" class="eb-btn" id="dyCancel" data-i18n="common.cancel">Cancel</button>
+        <button type="submit" class="solid-btn solid-btn--sm" id="dySave" data-i18n="common.save">Save</button>
       </div>
     </form>
   </dialog>
@@ -159,38 +161,38 @@
   <!-- trip profile dialog -->
   <dialog id="profileDialog" class="dlg" aria-labelledby="profileTitle">
     <form class="dlg__form" id="profileForm">
-      <h3 class="dlg__title" id="profileTitle">Trip profile</h3>
+      <h3 class="dlg__title" id="profileTitle" data-i18n="trip.profile.title">Trip profile</h3>
       <div class="fld-row">
-        <label class="fld"><span>Start date</span><input id="pfStartDate" type="date" /></label>
-        <label class="fld"><span>Pace</span><select id="pfPace">
-          <option value="">—</option><option value="relaxed">Relaxed</option><option value="balanced">Balanced</option><option value="packed">Packed</option>
+        <label class="fld"><span data-i18n="trip.profile.startDate">Start date</span><input id="pfStartDate" type="date" /></label>
+        <label class="fld"><span data-i18n="trip.profile.pace">Pace</span><select id="pfPace">
+          <option value="">—</option><option value="relaxed" data-i18n="trip.profile.paceRelaxed">Relaxed</option><option value="balanced" data-i18n="trip.profile.paceBalanced">Balanced</option><option value="packed" data-i18n="trip.profile.pacePacked">Packed</option>
         </select></label>
       </div>
       <div class="fld-row">
-        <label class="fld"><span>Budget level</span><select id="pfBudgetLevel">
-          <option value="">—</option><option value="shoestring">Shoestring</option><option value="mid">Mid</option><option value="comfort">Comfort</option><option value="lux">Lux</option>
+        <label class="fld"><span data-i18n="trip.profile.budgetLevel">Budget level</span><select id="pfBudgetLevel">
+          <option value="">—</option><option value="shoestring" data-i18n="trip.profile.budgetShoestring">Shoestring</option><option value="mid" data-i18n="trip.profile.budgetMid">Mid</option><option value="comfort" data-i18n="trip.profile.budgetComfort">Comfort</option><option value="lux" data-i18n="trip.profile.budgetLux">Lux</option>
         </select></label>
-        <label class="fld"><span>Daily target (Rp)</span><input id="pfDailyTarget" type="number" min="0" step="1000" inputmode="numeric" placeholder="0" /></label>
+        <label class="fld"><span data-i18n="trip.profile.dailyTarget">Daily target (Rp)</span><input id="pfDailyTarget" type="number" min="0" step="1000" inputmode="numeric" placeholder="0" /></label>
       </div>
-      <label class="fld"><span>Interests (comma-separated)</span><input id="pfInterests" type="text" maxlength="200" placeholder="waterfalls, food, temples" /></label>
+      <label class="fld"><span data-i18n="trip.profile.interests">Interests (comma-separated)</span><input id="pfInterests" type="text" maxlength="200" placeholder="waterfalls, food, temples" data-i18n-ph="trip.profile.interestsPh" /></label>
       <div class="fld">
-        <span>Dietary</span>
+        <span data-i18n="trip.profile.dietary">Dietary</span>
         <div class="chip-pick" id="pfDietary"></div>
       </div>
       <div class="fld-row">
-        <label class="fld"><span>Adults</span><input id="pfAdults" type="number" min="0" step="1" inputmode="numeric" placeholder="0" /></label>
-        <label class="fld"><span>Kids</span><input id="pfKids" type="number" min="0" step="1" inputmode="numeric" placeholder="0" /></label>
+        <label class="fld"><span data-i18n="trip.profile.adults">Adults</span><input id="pfAdults" type="number" min="0" step="1" inputmode="numeric" placeholder="0" /></label>
+        <label class="fld"><span data-i18n="trip.profile.kids">Kids</span><input id="pfKids" type="number" min="0" step="1" inputmode="numeric" placeholder="0" /></label>
       </div>
       <div class="fld-row">
-        <label class="fld"><span>Mobility</span><select id="pfMobility">
-          <option value="">—</option><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="active">Active</option>
+        <label class="fld"><span data-i18n="trip.profile.mobility">Mobility</span><select id="pfMobility">
+          <option value="">—</option><option value="easy" data-i18n="trip.profile.mobilityEasy">Easy</option><option value="moderate" data-i18n="trip.profile.mobilityModerate">Moderate</option><option value="active" data-i18n="trip.profile.mobilityActive">Active</option>
         </select></label>
-        <label class="fld"><span>Home currency</span><input id="pfHomeCurrency" type="text" maxlength="8" placeholder="USD" /></label>
+        <label class="fld"><span data-i18n="trip.profile.homeCurrency">Home currency</span><input id="pfHomeCurrency" type="text" maxlength="8" placeholder="USD" /></label>
       </div>
       <p class="fld__err" id="pfErr" role="alert" hidden></p>
       <div class="dlg__actions">
-        <button type="button" class="eb-btn" id="pfCancel">Cancel</button>
-        <button type="submit" class="solid-btn solid-btn--sm" id="pfSave">Save</button>
+        <button type="button" class="eb-btn" id="pfCancel" data-i18n="common.cancel">Cancel</button>
+        <button type="submit" class="solid-btn solid-btn--sm" id="pfSave" data-i18n="common.save">Save</button>
       </div>
     </form>
   </dialog>
@@ -198,18 +200,18 @@
   <!-- AI generate dialog -->
   <dialog id="aiDialog" class="dlg" aria-labelledby="aiTitle">
     <form class="dlg__form" id="aiForm">
-      <h3 class="dlg__title" id="aiTitle">Generate itinerary with AI</h3>
-      <label class="fld"><span>Destination</span><input id="aiDest" type="text" maxlength="80" placeholder="e.g. Ubud, Bali" required /></label>
+      <h3 class="dlg__title" id="aiTitle" data-i18n="trip.ai.title">Generate itinerary with AI</h3>
+      <label class="fld"><span data-i18n="trip.ai.destination">Destination</span><input id="aiDest" type="text" maxlength="80" placeholder="e.g. Ubud, Bali" data-i18n-ph="trip.ai.destinationPh" required /></label>
       <div class="fld-row">
-        <label class="fld"><span>Days</span><input id="aiDays" type="number" min="1" max="14" value="3" /></label>
-        <label class="fld"><span>Notes (optional)</span><input id="aiNotes" type="text" maxlength="120" placeholder="waterfalls, cafes…" /></label>
+        <label class="fld"><span data-i18n="trip.ai.days">Days</span><input id="aiDays" type="number" min="1" max="14" value="3" /></label>
+        <label class="fld"><span data-i18n="trip.ai.notes">Notes (optional)</span><input id="aiNotes" type="text" maxlength="120" placeholder="waterfalls, cafes…" data-i18n-ph="trip.ai.notesPh" /></label>
       </div>
-      <p class="dlg__hint" id="aiProfileHint" hidden>✨ Using your trip profile (pace, budget, diet, group).</p>
-      <p class="dlg__hint">The destination &amp; notes are sent to the configured AI provider.</p>
+      <p class="dlg__hint" id="aiProfileHint" hidden data-i18n="trip.ai.profileHint">✨ Using your trip profile (pace, budget, diet, group).</p>
+      <p class="dlg__hint" data-i18n="trip.ai.providerHint">The destination &amp; notes are sent to the configured AI provider.</p>
       <p class="fld__err" id="aiErr" role="alert" hidden></p>
       <div class="dlg__actions">
-        <button type="button" class="eb-btn" id="aiCancel">Cancel</button>
-        <button type="submit" class="solid-btn solid-btn--sm" id="aiGo">Generate</button>
+        <button type="button" class="eb-btn" id="aiCancel" data-i18n="common.cancel">Cancel</button>
+        <button type="submit" class="solid-btn solid-btn--sm" id="aiGo" data-i18n="trip.ai.generate">Generate</button>
       </div>
     </form>
   </dialog>
@@ -217,21 +219,21 @@
   <!-- cost-link dialog -->
   <dialog id="costDialog" class="dlg" aria-labelledby="costTitle">
     <form class="dlg__form" id="costForm">
-      <h3 class="dlg__title" id="costTitle">Link a cost</h3>
-      <label class="fld"><span>Existing cost</span>
-        <select id="costSelect"><option value="">— none —</option></select>
+      <h3 class="dlg__title" id="costTitle" data-i18n="trip.cost.title">Link a cost</h3>
+      <label class="fld"><span data-i18n="trip.cost.existing">Existing cost</span>
+        <select id="costSelect"><option value="" data-i18n="trip.cost.none">— none —</option></select>
       </label>
-      <div class="cost-or">or</div>
+      <div class="cost-or" data-i18n="trip.cost.or">or</div>
       <div class="fld-row">
-        <label class="fld"><span>＋ Add as shared cost (amount)</span><input id="costAmount" type="number" min="0" step="1" inputmode="numeric" placeholder="0" /></label>
+        <label class="fld"><span data-i18n="trip.cost.addShared">＋ Add as shared cost (amount)</span><input id="costAmount" type="number" min="0" step="1" inputmode="numeric" placeholder="0" /></label>
       </div>
-      <p class="dlg__hint" id="costHint">A new shared cost split evenly among everyone, linked to this stop.</p>
+      <p class="dlg__hint" id="costHint" data-i18n="trip.cost.hint">A new shared cost split evenly among everyone, linked to this stop.</p>
       <p class="fld__err" id="costErr" role="alert" hidden></p>
       <div class="dlg__actions">
-        <button type="button" class="eb-btn danger" id="costUnlink" hidden>Unlink</button>
+        <button type="button" class="eb-btn danger" id="costUnlink" hidden data-i18n="trip.cost.unlink">Unlink</button>
         <span style="flex:1"></span>
-        <button type="button" class="eb-btn" id="costCancel">Cancel</button>
-        <button type="submit" class="solid-btn solid-btn--sm" id="costSave">Save</button>
+        <button type="button" class="eb-btn" id="costCancel" data-i18n="common.cancel">Cancel</button>
+        <button type="submit" class="solid-btn solid-btn--sm" id="costSave" data-i18n="common.save">Save</button>
       </div>
     </form>
   </dialog>
@@ -239,20 +241,20 @@
   <!-- themed confirm -->
   <dialog id="confirmDialog" class="dlg" aria-labelledby="cfTitle">
     <div class="dlg__form">
-      <h3 class="dlg__title" id="cfTitle">Are you sure?</h3>
+      <h3 class="dlg__title" id="cfTitle" data-i18n="trip.confirm.title">Are you sure?</h3>
       <p class="dlg__body" id="cfBody"></p>
       <div class="dlg__actions">
-        <button type="button" class="eb-btn" id="cfCancel">Cancel</button>
-        <button type="button" class="solid-btn solid-btn--sm" id="cfOk">Confirm</button>
+        <button type="button" class="eb-btn" id="cfCancel" data-i18n="common.cancel">Cancel</button>
+        <button type="button" class="solid-btn solid-btn--sm" id="cfOk" data-i18n="common.confirm">Confirm</button>
       </div>
     </div>
   </dialog>
 
   <!-- spinner overlay -->
   <div class="spin-overlay" id="spinner" role="status" aria-live="polite" hidden>
-    <div class="spin" aria-hidden="true"></div><span id="spinMsg">Working…</span>
+    <div class="spin" aria-hidden="true"></div><span id="spinMsg" data-i18n="common.working">Working…</span>
   </div>
 
-  <script src="app.js?v=20260617i"></script>
+  <script src="app.js?v=20260617j"></script>
 </body>
 </html>
