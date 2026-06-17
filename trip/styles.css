@@ -722,6 +722,16 @@ body.picking #map { cursor:crosshair; }
 
 @media (prefers-reduced-motion: reduce) { .toast { transition:none; } .dlg__progbar > span { animation:none; width:100%; left:0; } }
 
+/* offline banner — dusk-themed, non-blocking, safe-area aware */
+.offline-banner { position:fixed; left:50%; transform:translateX(-50%) translateY(8px);
+  bottom:calc(16px + env(safe-area-inset-bottom,0px)); z-index:1400; max-width:calc(100vw - 32px);
+  display:flex; align-items:center; gap:8px; padding:10px 16px; border-radius:99px;
+  background:#13201b; border:1px solid var(--line-2,rgba(255,255,255,.13)); color:#fff;
+  font-size:.84rem; box-shadow:0 12px 30px -12px rgba(0,0,0,.7);
+  opacity:0; pointer-events:none; transition:.25s; }
+.offline-banner.in { opacity:1; transform:translateX(-50%) translateY(0); }
+@media (prefers-reduced-motion: reduce) { .offline-banner { transition:none; } }
+
 /* editing-only buttons (Trip profile) */
 .editing-only[hidden] { display:none; }
 body:not(.is-editing) .editing-only { display:none; }

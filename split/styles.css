@@ -507,6 +507,15 @@ button.pbar-chip:hover { border-color: var(--c, var(--teal)); transform: transla
   font-weight: 700; font-size: .84rem; color: var(--sun); padding: 2px 4px; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
+/* offline banner — dusk-themed, non-blocking, safe-area aware */
+.offline-banner { position: fixed; left: 50%; transform: translateX(-50%) translateY(8px);
+  bottom: calc(16px + var(--safe-b)); z-index: 200; max-width: min(92vw, 420px);
+  display: flex; align-items: center; gap: 8px; padding: 11px 16px; border-radius: var(--r-md);
+  background: var(--card-2); color: var(--text); border: 1px solid var(--line); box-shadow: var(--shadow);
+  font-size: .86rem; opacity: 0; pointer-events: none; transition: opacity .22s, transform .22s; }
+.offline-banner.in { opacity: 1; transform: translateX(-50%) translateY(0); }
+@media (prefers-reduced-motion: reduce) { .offline-banner { transition: none; } }
+
 /* avatars + condensed assigner (>8 people) */
 .assign-row { margin-top: 10px; }
 .avatar-stack { display: inline-flex; align-items: center; }

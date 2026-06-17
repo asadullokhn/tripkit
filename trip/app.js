@@ -1238,5 +1238,33 @@
     if (!planDlg.open) buildDietChips();
     if (data || itin) renderAll();
   });
+
+  // ---------- service worker + offline banner ----------
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (sessionStorage.getItem("tk-sw-reloaded")) return;
+      sessionStorage.setItem("tk-sw-reloaded", "1");
+      location.reload();
+    });
+  }
+  let offlineBanner = null;
+  function showOffline() {
+    if (offlineBanner) return;
+    offlineBanner = document.createElement("div");
+    offlineBanner.className = "offline-banner"; offlineBanner.setAttribute("role", "status"); offlineBanner.setAttribute("aria-live", "polite");
+    offlineBanner.textContent = t("common.offline", "📴 Offline — showing your saved plan");
+    document.body.appendChild(offlineBanner);
+    requestAnimationFrame(() => offlineBanner && offlineBanner.classList.add("in"));
+  }
+  function hideOffline() {
+    if (!offlineBanner) return;
+    const b = offlineBanner; offlineBanner = null; b.classList.remove("in");
+    setTimeout(() => b.remove(), 300);
+  }
+  window.addEventListener("offline", showOffline);
+  window.addEventListener("online", hideOffline);
+  if (!navigator.onLine) showOffline();
+
   boot();
 })();

@@ -65,6 +65,11 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
 
+	// link-preview (Open Graph / Twitter card) for shared /trip links — PUBLIC
+	// (bare, no passcode/admin): social crawlers must reach it. nginx routes only
+	// crawler user-agents here.
+	mux.HandleFunc("GET /api/og", handleOG)
+
 	// auth
 	mux.HandleFunc("POST /api/login", handleLogin)
 	mux.HandleFunc("POST /api/logout", handleLogout)

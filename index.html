@@ -401,5 +401,51 @@
     boot();
   })();
   </script>
+
+  <style>
+    /* offline banner — dusk-themed, non-blocking, safe-area aware */
+    .offline-banner { position:fixed; left:50%; transform:translateX(-50%) translateY(8px);
+      bottom:max(16px, var(--safe-b)); z-index:1400; max-width:calc(100vw - 32px);
+      display:flex; align-items:center; gap:8px; padding:10px 16px; border-radius:var(--radius-pill);
+      background:#13201b; border:1px solid var(--line-strong, var(--line)); color:var(--ink);
+      font-family:var(--font-body); font-size:.84rem; box-shadow:var(--shadow-2);
+      opacity:0; pointer-events:none; transition:opacity var(--dur), transform var(--dur); }
+    .offline-banner.in { opacity:1; transform:translateX(-50%) translateY(0); }
+    @media (prefers-reduced-motion: reduce) { .offline-banner { transition:none; } }
+  </style>
+  <script>
+  (() => {
+    // ---- service worker registration (deploy-safe; never throws into the page) ----
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+      // When a new SW takes control after a deploy, reload ONCE so fresh content shows.
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (sessionStorage.getItem("tk-sw-reloaded")) return;
+        sessionStorage.setItem("tk-sw-reloaded", "1");
+        location.reload();
+      });
+    }
+
+    // ---- offline banner ----
+    const I18N = window.I18N || { t: (k, d) => (d != null ? d : k) };
+    let banner = null;
+    function showOffline() {
+      if (banner) return;
+      banner = document.createElement("div");
+      banner.className = "offline-banner"; banner.setAttribute("role", "status"); banner.setAttribute("aria-live", "polite");
+      banner.textContent = I18N.t("common.offline", "📴 Offline — showing your saved plan");
+      document.body.appendChild(banner);
+      requestAnimationFrame(() => banner && banner.classList.add("in"));
+    }
+    function hideOffline() {
+      if (!banner) return;
+      const b = banner; banner = null; b.classList.remove("in");
+      setTimeout(() => b.remove(), 300);
+    }
+    window.addEventListener("offline", showOffline);
+    window.addEventListener("online", hideOffline);
+    if (!navigator.onLine) showOffline();
+  })();
+  </script>
 </body>
 </html>
