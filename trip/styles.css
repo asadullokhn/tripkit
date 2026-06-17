@@ -820,3 +820,39 @@ body:not(.is-editing) .editing-only { display:none; }
 @media (prefers-reduced-motion: reduce) {
   .tl-item.is-now .stop, .mk-wrap.is-now .mk { animation:none; }
 }
+
+/* ============================================================
+   Public recruiting — at-a-glance hero + "I'm in" join wall
+   ============================================================ */
+
+/* at-a-glance hero card */
+.trip-hero {
+  margin:6px 0 14px; padding:14px 16px;
+  background:linear-gradient(180deg, color-mix(in srgb,var(--day) 12%, var(--panel-2)), var(--panel-2));
+  border:1px solid color-mix(in srgb,var(--day) 26%, var(--line));
+  border-radius:16px; display:grid; gap:7px;
+}
+.hero-name { font-family:"Bricolage Grotesque",sans-serif; font-weight:800; font-size:1.18rem; line-height:1.1; letter-spacing:-0.02em; color:var(--ink); }
+.hero-dates { font-family:"DM Mono",monospace; font-size:.74rem; color:var(--ink-soft,#cdd8cf); }
+.hero-facts { display:flex; flex-wrap:wrap; gap:7px; }
+.hero-fact { display:inline-flex; align-items:center; font-family:"DM Mono",monospace; font-size:.68rem; color:var(--ink-soft,#cdd8cf);
+  background:var(--panel-2,rgba(255,255,255,.05)); border:1px solid var(--line,rgba(255,255,255,.08)); border-radius:99px; padding:4px 10px; white-space:nowrap; }
+
+/* "I'm in" join wall */
+.join-wall { margin:0 0 16px; padding:14px 16px; background:var(--panel-2,rgba(255,255,255,.05));
+  border:1px solid var(--line-2,rgba(255,255,255,.13)); border-radius:16px; display:grid; gap:11px; }
+.jw-head { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+.jw-btn { width:auto; }
+.jw-count { font-family:"DM Mono",monospace; font-size:.74rem; color:var(--ink-soft,#cdd8cf); }
+.jw-count.jw-full { color:#ffce6b; }
+.jw-roster { display:flex; flex-wrap:wrap; align-items:center; gap:7px; font-family:"DM Mono",monospace; font-size:.7rem; color:var(--muted,#8fa395); }
+.jw-roster-label { letter-spacing:.04em; color:var(--muted-2,#6d8174); }
+.jw-roster.jw-empty { color:var(--muted-2,#6d8174); }
+.jw-person { display:inline-flex; align-items:center; gap:4px; color:var(--ink-soft,#cdd8cf);
+  background:rgba(255,255,255,.05); border:1px solid var(--line,rgba(255,255,255,.08)); border-radius:99px; padding:3px 9px; }
+.jw-person .jw-x { color:var(--day,#34dfc0); }
+.jw-rm { appearance:none; -webkit-tap-highlight-color:transparent; cursor:pointer; margin-left:2px;
+  width:18px; height:18px; line-height:1; border-radius:50%; display:inline-grid; place-items:center;
+  background:transparent; border:0; color:var(--muted-2,#6d8174); font-size:.7rem; transition:color .15s ease; }
+.jw-rm:hover { color:#ff8a93; }
+.jw-rm:focus-visible { outline:2px solid var(--accent,#e6814a); outline-offset:1px; }

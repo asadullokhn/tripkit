@@ -116,6 +116,11 @@ func main() {
 	// trip planning profile (pace/budget/interests/...) — editor tier
 	mux.HandleFunc("PUT /api/trips/{id}/profile", requireEditor(handleProfilePut))
 
+	// RSVP join wall — POST is PUBLIC (recruit travelers from the shared page),
+	// rate-limited per IP; organizer moderates (removes) entries with admin session.
+	mux.HandleFunc("POST /api/trips/{id}/rsvp", handleRSVP)
+	mux.HandleFunc("DELETE /api/trips/{id}/rsvp/{idx}", requireAdmin(handleRSVPDelete))
+
 	// OCR — editor tier (any passcode user can upload a receipt photo);
 	// rate-limited per IP since it costs money and leaves the box.
 	mux.HandleFunc("POST /api/ocr", requireEditor(handleOCR))

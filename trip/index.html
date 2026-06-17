@@ -22,7 +22,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <link rel="stylesheet" href="/shared/tokens.css?v=1" />
-  <link rel="stylesheet" href="styles.css?v=20260617k" />
+  <link rel="stylesheet" href="styles.css?v=20260617l" />
   <script src="/shared/i18n.js?v=1"></script>
 </head>
 <body>
@@ -158,6 +158,21 @@
     </form>
   </dialog>
 
+  <!-- RSVP "I'm in" join dialog (public) -->
+  <dialog id="rsvpDialog" class="dlg" aria-labelledby="rsvpTitle">
+    <form class="dlg__form" id="rsvpForm">
+      <h3 class="dlg__title" id="rsvpTitle" data-i18n="trip.rsvp.title">Join this trip</h3>
+      <p class="dlg__hint" data-i18n="trip.rsvp.hint">Add your name so the organizer knows you're coming.</p>
+      <label class="fld"><span data-i18n="trip.rsvp.name">Your name</span><input id="rsvpName" type="text" maxlength="40" autocomplete="name" required /></label>
+      <label class="fld"><span data-i18n="trip.rsvp.count">How many of you?</span><input id="rsvpCount" type="number" min="1" max="10" step="1" value="1" inputmode="numeric" /></label>
+      <p class="fld__err" id="rsvpErr" role="alert" hidden></p>
+      <div class="dlg__actions">
+        <button type="button" class="eb-btn" id="rsvpCancel" data-i18n="common.cancel">Cancel</button>
+        <button type="submit" class="solid-btn solid-btn--sm" id="rsvpGo" data-i18n="trip.rsvp.join">✋ I'm in</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- combined plan dialog: AI generate + trip preferences -->
   <dialog id="planDialog" class="dlg dlg--plan" aria-labelledby="planTitle">
     <form class="dlg__form" id="planForm">
@@ -179,6 +194,7 @@
         <option value="">—</option><option value="shoestring" data-i18n="trip.profile.budgetShoestring">Shoestring</option><option value="mid" data-i18n="trip.profile.budgetMid">Mid</option><option value="comfort" data-i18n="trip.profile.budgetComfort">Comfort</option><option value="lux" data-i18n="trip.profile.budgetLux">Lux</option>
       </select></label>
       <label class="fld"><span data-i18n="trip.profile.dailyTarget">Daily target (Rp)</span><input id="pfDailyTarget" type="number" min="0" step="1000" inputmode="numeric" placeholder="0" /></label>
+      <label class="fld"><span data-i18n="trip.profile.capacity">Group size cap (optional)</span><input id="pfCapacity" type="number" min="0" max="200" step="1" inputmode="numeric" placeholder="0" /></label>
       <label class="fld"><span data-i18n="trip.profile.interests">Interests (comma-separated)</span><input id="pfInterests" type="text" maxlength="200" placeholder="waterfalls, food, temples" data-i18n-ph="trip.profile.interestsPh" autocomplete="off" /></label>
       <div class="fld">
         <span data-i18n="trip.profile.dietary">Dietary</span>
@@ -244,6 +260,6 @@
     </div>
   </dialog>
 
-  <script src="app.js?v=20260617k"></script>
+  <script src="app.js?v=20260617l"></script>
 </body>
 </html>

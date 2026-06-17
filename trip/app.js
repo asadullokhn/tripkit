@@ -22,6 +22,8 @@
   let admin = false, aiEnabled = false, authed = false, editing = false;
   let data = null;       // { trip, people, itinerary, profile?, rev } from the public endpoint
   let itin = { title: "", days: [] };
+  let signups = [];      // [{name, count, at}] — public join wall
+  let capacity = 0;      // max travelers; 0 = no cap
   let profile = null;    // sanitized (public) or full (authed) trip profile
   let fullDoc = null;    // full trip doc (expenses/receipts) once authed — for cost links
   let draft = null;      // AI draft under review
@@ -514,6 +516,72 @@
     return `<div class="good-to-know"><span class="gtk-label">${esc(t("trip.gtk.label", "Good to know"))}</span>${bits.map((b) => `<span class="gtk-chip">${esc(b)}</span>`).join("")}</div>`;
   }
 
+  // ---------- at-a-glance hero ----------
+  // sum road distance (km) + drive time (h) across every day's loaded legs (uses routeCache)
+  function tripRoadTotals() {
+    let distM = 0, durS = 0, any = false;
+    days().forEach((day) => {
+      const pins = (day.stops || []).filter(hasPin);
+      for (let i = 0; i < pins.length - 1; i++) {
+        const m = modeOf(pins[i + 1]); if (!(MODES[m] && MODES[m].road)) continue;
+        const leg = routeCache[legSig(pins[i], pins[i + 1], m)];
+        if (leg && leg.line) { distM += leg.dist; durS += leg.dur; any = true; }
+      }
+    });
+    return any ? { km: distM / 1000, h: durS / 3600 } : null;
+  }
+  const totalStops = () => days().reduce((n, d) => n + ((d.stops && d.stops.length) || 0), 0);
+  // compact summary card near the top of the sheet (prominent for public recruits)
+  function heroHtml() {
+    if (!days().length) return "";
+    const name = (data && data.trip && data.trip.name) || itin.title || "";
+    const nDays = days().length, nStops = totalStops();
+    const dates = datesSummary();
+    const facts = [];
+    facts.push(nDays > 1 ? t("trip.chip.days", "{n} days", { n: nDays }) : t("trip.chip.day", "{n} day", { n: nDays }));
+    if (nStops) facts.push(nStops > 1 ? t("trip.hero.stops", "{n} stops", { n: nStops }) : t("trip.hero.stop", "{n} stop", { n: nStops }));
+    const rd = tripRoadTotals();
+    if (rd) facts.push(t("trip.hero.driving", "~{km} km · {h}h driving", { km: Math.round(rd.km), h: rd.h < 10 ? rd.h.toFixed(1).replace(/\.0$/, "") : Math.round(rd.h) }));
+    const datesLine = dates ? `<div class="hero-dates">🗓 ${esc(dates)}</div>` : "";
+    return `<div class="trip-hero">
+      ${name ? `<div class="hero-name">${esc(name)}</div>` : ""}
+      ${datesLine}
+      <div class="hero-facts">${facts.map((f) => `<span class="hero-fact">${esc(f)}</span>`).join("")}</div>
+    </div>`;
+  }
+
+  // ---------- "I'm in" join wall ----------
+  const signupTotal = () => signups.reduce((n, s) => n + Math.max(1, +s.count || 1), 0);
+  function joinWallHtml() {
+    if (!days().length) return "";
+    const total = signupTotal();
+    const full = capacity > 0 && total >= capacity;
+    let countLine = "";
+    if (capacity > 0) {
+      const left = Math.max(0, capacity - total);
+      countLine = full
+        ? `<span class="jw-count jw-full">${esc(t("trip.rsvp.full", "Full"))}</span>`
+        : `<span class="jw-count">${esc(t("trip.rsvp.ofCap", "{n} of {cap} — {left} spot{s} left", { n: total, cap: capacity, left, s: left === 1 ? "" : "s" }))}</span>`;
+    } else if (total > 0) {
+      countLine = `<span class="jw-count">${esc(total > 1 ? t("trip.rsvp.coming", "{n} coming", { n: total }) : t("trip.rsvp.comingOne", "{n} coming", { n: total }))}</span>`;
+    }
+    const roster = signups.length
+      ? `<div class="jw-roster"><span class="jw-roster-label">${esc(t("trip.rsvp.rosterLabel", "Coming ({n}):", { n: total }))}</span>${signups.map((s, i) => {
+          const cnt = Math.max(1, +s.count || 1);
+          const nm = esc(s.name) + (cnt > 1 ? ` <span class="jw-x">×${cnt}</span>` : "");
+          const rm = admin ? `<button class="jw-rm" type="button" data-act="rsvprm" data-idx="${i}" title="${esc(t("trip.rsvp.remove", "Remove"))}" aria-label="${esc(t("trip.rsvp.removeName", "Remove {name}", { name: s.name }))}">✕</button>` : "";
+          return `<span class="jw-person">${nm}${rm}</span>`;
+        }).join("")}</div>`
+      : `<div class="jw-roster jw-empty">${esc(t("trip.rsvp.beFirst", "Be the first to join."))}</div>`;
+    return `<div class="join-wall">
+      <div class="jw-head">
+        <button class="solid-btn jw-btn" id="joinBtn" type="button" ${full ? "disabled" : ""}>✋ ${esc(t("trip.rsvp.join", "I'm in"))}</button>
+        ${countLine}
+      </div>
+      ${roster}
+    </div>`;
+  }
+
   function renderSheet() {
     const inner = $("#sheet-inner");
     if (!days().length) {
@@ -531,7 +599,7 @@
       const eai = $("#emptyAi"); if (eai) eai.addEventListener("click", () => openPlan());
       return;
     }
-    let gi = 0; let html = nowStripHtml() + (authed ? profileSummaryHtml() : goodToKnowHtml());
+    let gi = 0; let html = nowStripHtml() + heroHtml() + joinWallHtml() + (authed ? profileSummaryHtml() : goodToKnowHtml());
     const list = currentDay === "all" ? days().map((_, i) => i) : [currentDay];
     list.forEach((di) => {
       const tl = computeDayTimeline(days()[di]);
@@ -545,8 +613,11 @@
 
     inner.querySelectorAll(".stop").forEach((b) => b.addEventListener("click", () => activateStop(Number(b.dataset.idx), "sheet")));
     inner.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", (e) => {
-      e.stopPropagation(); onEditAct(b.dataset.act, Number(b.dataset.di), Number(b.dataset.si));
+      e.stopPropagation();
+      if (b.dataset.act === "rsvprm") return removeSignup(Number(b.dataset.idx));
+      onEditAct(b.dataset.act, Number(b.dataset.di), Number(b.dataset.si));
     }));
+    const jb = $("#joinBtn"); if (jb) jb.addEventListener("click", openRsvp);
     ensureWeather();
     applyNowNext();
   }
@@ -848,6 +919,7 @@
     $("#pfStartDate").value = p.startDate || "";
     $("#pfPace").value = p.pace || ""; $("#pfBudgetLevel").value = p.budgetLevel || "";
     $("#pfDailyTarget").value = p.dailyTarget > 0 ? p.dailyTarget : "";
+    $("#pfCapacity").value = p.capacity > 0 ? p.capacity : "";
     $("#pfInterests").value = (p.interests || []).join(", ");
     const diet = new Set(p.dietary || []);
     $("#pfDietary").querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", diet.has(c.dataset.diet)));
@@ -862,6 +934,7 @@
       startDate: $("#pfStartDate").value || "",
       pace: $("#pfPace").value || "", budgetLevel: $("#pfBudgetLevel").value || "",
       dailyTarget: Math.max(0, parseInt($("#pfDailyTarget").value, 10) || 0),
+      capacity: Math.min(200, Math.max(0, parseInt($("#pfCapacity").value, 10) || 0)),
       interests, dietary,
       adults: Math.max(0, parseInt($("#pfAdults").value, 10) || 0),
       kids: Math.max(0, parseInt($("#pfKids").value, 10) || 0),
@@ -961,6 +1034,44 @@
     } else { toast(copy); }
   }
   $("#shareBtn").addEventListener("click", () => shareTrip(null));
+
+  // ---------- RSVP "I'm in" join wall (public) ----------
+  const rsvpDlg = $("#rsvpDialog"); let rsvpBusy = false;
+  function rsvpErr(msg) { const el = $("#rsvpErr"); el.textContent = msg || ""; el.hidden = !msg; }
+  function openRsvp() {
+    if (capacity > 0 && signupTotal() >= capacity) { toast(t("trip.rsvp.fullToast", "This trip is full"), "err"); return; }
+    rsvpErr(""); $("#rsvpName").value = ""; $("#rsvpCount").value = "1"; rsvpBusy = false;
+    $("#rsvpGo").disabled = false;
+    rsvpDlg.showModal(); setTimeout(() => $("#rsvpName").focus(), 30);
+  }
+  $("#rsvpCancel").addEventListener("click", () => { if (!rsvpBusy) rsvpDlg.close(); });
+  rsvpDlg.addEventListener("cancel", (e) => { e.preventDefault(); if (!rsvpBusy) rsvpDlg.close(); });
+  rsvpDlg.addEventListener("click", (e) => { if (e.target === rsvpDlg && !rsvpBusy) rsvpDlg.close(); });
+  $("#rsvpForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = $("#rsvpName").value.trim();
+    if (!name) { rsvpErr(t("trip.rsvp.nameRequired", "Please enter your name")); $("#rsvpName").focus(); return; }
+    let count = parseInt($("#rsvpCount").value, 10); if (!(count >= 1)) count = 1; if (count > 10) count = 10;
+    rsvpBusy = true; $("#rsvpGo").disabled = true; rsvpErr("");
+    try {
+      await api(`/trips/${tripId}/rsvp`, { method: "POST", body: { name, count } });
+      rsvpDlg.close(); toast(t("trip.rsvp.joined", "You're in! See you there 🎉"));
+      await reload(true);
+    } catch (err) {
+      rsvpBusy = false; $("#rsvpGo").disabled = false;
+      rsvpErr(err.code === 429 ? t("trip.rsvp.tooMany", "Too many requests — try again later.")
+        : err.code === 400 ? t("trip.rsvp.invalid", "Check your name and try again.")
+        : t("trip.rsvp.failed", "Couldn't join — try again."));
+    }
+  });
+  // admin: remove a signup
+  async function removeSignup(idx) {
+    if (!authed) return requireAuth(() => removeSignup(idx));
+    const s = signups[idx]; const nm = (s && s.name) || t("trip.rsvp.thisPerson", "this person");
+    if (!(await confirmAsk(t("trip.rsvp.removeTitle", "Remove from the list?"), t("trip.rsvp.removeBody", "“{name}” will be removed from the join list.", { name: nm }), t("trip.rsvp.remove", "Remove"), true))) return;
+    try { await api(`/trips/${tripId}/rsvp/${idx}`, { method: "DELETE" }); await reload(true); toast(t("trip.rsvp.removed", "Removed")); }
+    catch (err) { toast(err.code === 401 ? t("trip.toast.enterPasscode", "Enter the passcode to edit") : t("trip.rsvp.removeFailed", "Couldn't remove"), "err"); }
+  }
 
   // edit toggle + login
   $("#editToggle").addEventListener("click", () => { if (!editing) return requireAuth(() => { editing = true; renderAll(); }); editing = false; renderAll(); });
@@ -1075,6 +1186,11 @@
     data = d; itin = (d && d.itinerary) || { title: "", days: [] }; lastRev = d ? d.rev : -1;
     // authed full profile (incl dailyTarget) wins; else the sanitized public subset
     profile = (authed && fullDoc && fullDoc.profile) || (d && d.profile) || null;
+    // public join wall: signups + capacity (authed full doc wins, else public subset)
+    signups = (authed && fullDoc && Array.isArray(fullDoc.signups)) ? fullDoc.signups
+      : (d && Array.isArray(d.signups)) ? d.signups : [];
+    capacity = (authed && fullDoc && fullDoc.profile) ? (+fullDoc.profile.capacity || 0)
+      : (d && +d.capacity) || 0;
     _dateFmt = null;
   }
   async function reload(silent) {

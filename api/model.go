@@ -138,6 +138,15 @@ type Profile struct {
 	Kids         int      `json:"kids,omitempty"`
 	Mobility     string   `json:"mobility,omitempty"`     // easy|moderate|active
 	HomeCurrency string   `json:"homeCurrency,omitempty"` // SENSITIVE
+	Capacity     int      `json:"capacity,omitempty"`     // max travelers; 0 = no cap
+}
+
+// A public RSVP on the join wall: a name + party size, recorded on the public page.
+// Names + counts only — never money. Moderated (removable) by the organizer.
+type Signup struct {
+	Name  string `json:"name"`
+	Count int    `json:"count,omitempty"`
+	At    string `json:"at,omitempty"`
 }
 
 // The whole trip document — one JSON file per trip.
@@ -150,6 +159,7 @@ type TripDoc struct {
 	Itinerary   *Itinerary   `json:"itinerary,omitempty"`
 	Profile     *Profile     `json:"profile,omitempty"`
 	Settlement  *Settlement  `json:"settlement,omitempty"`
+	Signups     []Signup     `json:"signups,omitempty"`
 	Rev         int          `json:"rev"`
 	UpdatedAt   string       `json:"updatedAt"`
 }
