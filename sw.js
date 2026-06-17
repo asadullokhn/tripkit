@@ -18,7 +18,7 @@
    - anything else cross-origin        : passthrough (no respondWith).
    ============================================================ */
 
-const VERSION = "tk-1";
+const VERSION = "tk-2";
 const CACHE = VERSION;          // versioned precache / runtime cache for app shell + api
 const TILES = "tk-tiles";       // long-lived runtime cache for map tiles + leaflet
 const TILES_MAX = 250;
