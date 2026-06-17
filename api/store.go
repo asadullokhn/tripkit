@@ -104,6 +104,11 @@ func (s *Store) list() ([]TripSummary, error) {
 		if err != nil {
 			continue
 		}
+		// only list canonical trip files (filename stem == trip id). Guards against
+		// stray copies/backups landing in this dir and appearing as phantom trips.
+		if d.Trip.ID != id {
+			continue
+		}
 		out = append(out, d.summary())
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
