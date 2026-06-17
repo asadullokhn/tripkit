@@ -62,7 +62,7 @@
   // ---------- profile vocab + helpers ----------
   const PACE_LABEL = { relaxed: "Relaxed", balanced: "Balanced", packed: "Packed" };
   const BUDGET_LABEL = { shoestring: "Shoestring", mid: "Mid", comfort: "Comfort", lux: "Lux" };
-  const MOBILITY_LABEL = { easy: "Easy pace", moderate: "Moderate", active: "Active" };
+  const MOBILITY_LABEL = { easy: "Easy walking", moderate: "Some walking", active: "Active days" };
   const DIET_OPTS = ["halal", "veg", "vegan", "no-pork", "no-alcohol", "gluten-free"];
   const DIET_LABEL = { halal: "Halal", veg: "Vegetarian", vegan: "Vegan", "no-pork": "No pork", "no-alcohol": "No alcohol", "gluten-free": "Gluten-free" };
   // derive a Date for day index from profile.startDate (ISO yyyy-mm-dd), local-time, DST-safe
