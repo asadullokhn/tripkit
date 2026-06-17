@@ -634,8 +634,9 @@ body.sheet-hidden .sheet-hide { opacity: 0; pointer-events: none; }
 @keyframes tk-shake { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-7px)} 40%,80%{transform:translateX(7px)} }
 
 /* dialogs */
-.dlg { border:1px solid var(--line-2,rgba(255,255,255,.13)); background:#13201b; color:var(--ink,#eef3ee); border-radius:20px; padding:0; width:min(94vw,400px); box-shadow:0 18px 50px -22px rgba(0,0,0,.8); }
-.dlg::backdrop { background:rgba(4,10,8,.66); }
+.dlg { border:1px solid var(--line-2,rgba(255,255,255,.13)); background:linear-gradient(180deg,#16241e,#101b16); color:var(--ink,#eef3ee); border-radius:20px; padding:0; width:min(94vw,400px); max-height:min(88vh,760px); overflow:auto; box-shadow:0 24px 60px -20px rgba(0,0,0,.85); }
+.dlg:focus, .dlg:focus-visible { outline:none; }   /* kill the default (blue) focus ring on showModal */
+.dlg::backdrop { background:rgba(4,10,8,.62); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); }
 .dlg__form { padding:22px; display:grid; gap:13px; }
 .dlg__title { font-family:"Bricolage Grotesque",sans-serif; font-size:1.18rem; margin:0; }
 .dlg__hint { font-size:.74rem; color:var(--muted,#8fa395); margin:0; }
@@ -650,7 +651,7 @@ body.sheet-hidden .sheet-hide { opacity: 0; pointer-events: none; }
 body.picking #map { cursor:crosshair; }
 .fld input, .fld select, .fld textarea { font-family:"Hanken Grotesque",sans-serif; font-size:.95rem; color:#fff; background:#0a120f;
   border:1px solid var(--line-2,rgba(255,255,255,.13)); border-radius:10px; padding:10px 12px; text-transform:none; letter-spacing:0; }
-.fld input:focus, .fld select:focus, .fld textarea:focus { outline:none; border-color:var(--accent,#e6814a); }
+.fld input:focus, .fld select:focus, .fld textarea:focus { outline:none; border-color:var(--accent,#e6814a); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent,#e6814a) 20%, transparent); }
 .fld__err { color:#ff8a93; font-size:.78rem; margin:0; }
 .cost-or { text-align:center; font-family:"DM Mono",monospace; font-size:.7rem; color:var(--muted-2,#6d8174); }
 
