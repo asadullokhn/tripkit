@@ -1,8 +1,11 @@
 # Tripkit — static site (landing + itinerary + bill-splitter) served by nginx
 FROM nginx:1.27-alpine
 
-# landing page + logo
-COPY index.html favicon.svg /usr/share/nginx/html/
+# landing page + logo + PWA manifest/icons
+COPY index.html favicon.svg favicon-32.png manifest.webmanifest /usr/share/nginx/html/
+COPY icon-192.png icon-512.png icon-maskable-512.png apple-touch-icon-180.png /usr/share/nginx/html/
+# shared design tokens (single source of truth)
+COPY shared/ /usr/share/nginx/html/shared/
 # trip itinerary  -> /trip/
 COPY trip/ /usr/share/nginx/html/trip/
 # bill-splitter   -> /split/

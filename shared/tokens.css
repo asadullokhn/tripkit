@@ -1,0 +1,89 @@
+/* ============================================================
+   Tripkit — shared design tokens (single source of truth)
+   "Refine-the-dusk" system: deep teal base, one teal accent,
+   Bricolage / Hanken / DM Mono, AA-tuned text.
+
+   This file is linked FIRST on every surface (landing, /split,
+   /trip). During the redesign rollout each surface still defines
+   some of its own legacy :root vars AFTER this file, so those win
+   by cascade order — linking this changes nothing on its own.
+   Per-surface increments migrate each surface onto these names
+   and drop the legacy ones.
+   ============================================================ */
+
+:root {
+  /* ---- surfaces (dusk) ---- */
+  --base:        #0b1411;   /* deepest bg + the ONE theme-color */
+  --surface-1:   #0f1c18;   /* cards / sheet */
+  --surface-2:   #15261f;   /* raised / inputs */
+  --surface-3:   #1b2f27;   /* hover / active raise */
+  --line:        rgba(160, 200, 190, .12);   /* hairline */
+  --line-strong: rgba(160, 200, 190, .22);
+
+  /* ---- text (AA on the surfaces above) ---- */
+  --ink:    #f2f7f4;   /* primary */
+  --muted:  #a6bcb4;   /* secondary  — >=4.5:1 on surface-1/2 */
+  --faint:  #8aa49c;   /* micro / mono labels — retuned UP from the old #5f7d7c which failed AA */
+
+  /* ---- one accent + status ---- */
+  --accent:      #34dfc0;   /* teal — CTAs and active states only */
+  --accent-ink:  #05241e;   /* text/icons on accent fills */
+  --danger:      #ff6f6f;
+  --danger-ink:  #2a0d10;
+  --warn:        #ffd66b;
+  --good:        #54e6b5;
+
+  /* ---- brand "fun" palette (the split-disc) — for playful, sparing use ---- */
+  --coral: #ff6f59;
+  --gold:  #ffd66b;
+  --lagoon:#2fd6c3;
+  --sun:   #ffb454;
+
+  /* ---- per-day route/tab colors (bright on dark) ---- */
+  --day-1: #35d07a;
+  --day-2: #34dfc0;
+  --day-3: #ff9a5a;
+  --day-4: #c08cff;
+  --day-5: #ffd166;
+  --day-6: #5ab0ff;
+
+  /* ---- type ---- */
+  --font-display: "Bricolage Grotesque", system-ui, sans-serif;
+  --font-body:    "Hanken Grotesque", system-ui, sans-serif;
+  --font-mono:    "DM Mono", ui-monospace, monospace;
+
+  /* ---- shape ---- */
+  --radius-sm:   10px;
+  --radius-md:   14px;
+  --radius-lg:   20px;
+  --radius-pill: 999px;
+
+  /* ---- spacing scale ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+
+  /* ---- motion (transform/opacity only; honour reduce-motion per surface) ---- */
+  --dur-fast: 120ms;
+  --dur:      160ms;
+  --dur-slow: 240ms;
+  --ease-entrance: cubic-bezier(.22, 1, .36, 1);
+  --ease-standard: cubic-bezier(.4, 0, .2, 1);
+
+  /* ---- elevation ---- */
+  --shadow-1: 0 8px 24px -12px rgba(0, 0, 0, .6);
+  --shadow-2: 0 18px 50px -22px rgba(0, 0, 0, .75);
+
+  /* ---- safe areas (standalone PWA) ---- */
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+
+  /* ---- touch (HIG minimum hit region) ---- */
+  --tap-min: 44px;
+}
