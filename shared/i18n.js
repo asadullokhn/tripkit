@@ -94,16 +94,24 @@
     if (!document.getElementById("i18n-switcher-style")) {
       var st = document.createElement("style");
       st.id = "i18n-switcher-style";
+      // Compact chip: globe + short code (EN/RU/…) + chevron, with a full-size
+      // transparent native <select> overlaid on top. The visible label is fixed,
+      // narrow width (it no longer stretches to the widest option name), while the
+      // native select still gives an accessible, mobile-friendly language picker.
       st.textContent =
-        ".i18n-switcher{display:inline-flex;align-items:center;gap:6px;" +
-        "padding:6px 10px;border:1px solid var(--line-strong,rgba(160,200,190,.22));" +
+        ".i18n-switcher{position:relative;display:inline-flex;align-items:center;gap:5px;" +
+        "padding:7px 12px;border:1px solid var(--line-strong,rgba(160,200,190,.22));" +
         "border-radius:var(--radius-pill,999px);background:var(--surface-2,#15261f);" +
         "color:var(--ink,#f2f7f4);font-family:var(--font-body,system-ui);font-size:13px;" +
-        "line-height:1;cursor:pointer;transition:border-color var(--dur,160ms) ease,background var(--dur,160ms) ease}" +
+        "line-height:1;cursor:pointer;white-space:nowrap;" +
+        "transition:border-color var(--dur,160ms) ease,background var(--dur,160ms) ease}" +
         ".i18n-switcher:hover{background:var(--surface-3,#1b2f27);border-color:var(--accent,#34dfc0)}" +
+        ".i18n-switcher:focus-within{outline:2px solid var(--accent,#34dfc0);outline-offset:2px}" +
         ".i18n-switcher .i18n-globe{font-size:14px;line-height:1}" +
-        ".i18n-switcher select{appearance:none;-webkit-appearance:none;background:transparent;" +
-        "border:0;color:inherit;font:inherit;cursor:pointer;outline:none;padding-right:2px}" +
+        ".i18n-switcher .i18n-code{font-weight:600;letter-spacing:.06em}" +
+        ".i18n-switcher .i18n-chev{font-size:9px;opacity:.55;margin-top:1px}" +
+        ".i18n-switcher select{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;" +
+        "opacity:0;cursor:pointer;border:0;font:inherit;-webkit-appearance:none;appearance:none}" +
         ".i18n-switcher select option{background:var(--surface-1,#0f1c18);color:var(--ink,#f2f7f4)}";
       document.head.appendChild(st);
     }
@@ -113,6 +121,13 @@
     globe.className = "i18n-globe";
     globe.textContent = "🌐";
     globe.setAttribute("aria-hidden", "true");
+    var code = document.createElement("span");
+    code.className = "i18n-code";
+    code.setAttribute("aria-hidden", "true");
+    var chev = document.createElement("span");
+    chev.className = "i18n-chev";
+    chev.textContent = "▾";
+    chev.setAttribute("aria-hidden", "true");
     var sel = document.createElement("select");
     sel.setAttribute("aria-label", "Language");
     I18N.LANGS.forEach(function (pair) {
@@ -121,10 +136,14 @@
       o.textContent = pair[1];
       sel.appendChild(o);
     });
+    function syncCode() { code.textContent = (I18N.lang || "en").toUpperCase(); }
     sel.value = I18N.lang;
+    syncCode();
     sel.addEventListener("change", function () { I18N.setLang(sel.value); });
-    window.addEventListener("i18n:change", function () { sel.value = I18N.lang; });
+    window.addEventListener("i18n:change", function () { sel.value = I18N.lang; syncCode(); });
     el.appendChild(globe);
+    el.appendChild(code);
+    el.appendChild(chev);
     el.appendChild(sel);
   };
 

@@ -866,3 +866,37 @@ body:not(.is-editing) .editing-only { display:none; }
   background:transparent; border:0; color:var(--muted-2,#6d8174); font-size:.7rem; transition:color .15s ease; }
 .jw-rm:hover { color:#ff8a93; }
 .jw-rm:focus-visible { outline:2px solid var(--accent,#e6814a); outline-offset:1px; }
+
+/* ============================================================
+   Mobile UI polish — legible floating controls over the map,
+   compact language chip, calmer peek density, quiet sheet-hide
+   ============================================================ */
+
+/* The edit bar floats over the map where the scrim has faded, so its controls
+   need their own dark glass (matching the day tabs) to stay readable against
+   bright map tiles and the route line. */
+.edit-bar .eb-btn,
+.edit-bar .i18n-switcher {
+  background: rgba(10, 16, 13, 0.62);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+  border-color: var(--line-2);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.32);
+}
+.edit-bar .eb-btn:hover,
+.edit-bar .i18n-switcher:hover { background: rgba(16, 24, 20, 0.74); }
+/* align the language chip with the 44px control row (also a proper tap target) */
+.edit-bar .i18n-switcher { min-height: 44px; padding: 0 13px; }
+
+/* sheet-hide reads as a quiet chevron, not a boxed button competing with the grip */
+.sheet-hide { background: transparent; border-color: transparent; color: var(--muted-2); }
+.sheet-hide:hover { background: rgba(255, 255, 255, 0.06); border-color: var(--line); color: var(--ink-soft); }
+
+@media (max-width: 859px) {
+  /* a long day title shouldn't swallow the sheet peek on a phone */
+  .day-title { font-size: clamp(23px, 6.4vw, 30px); }
+  /* tighter recruiting cards so the first day's stops peek into view */
+  .trip-hero { padding: 12px 14px; margin: 4px 0 10px; }
+  .hero-name { font-size: 1.1rem; }
+  .join-wall { padding: 12px 14px; margin: 0 0 12px; gap: 9px; }
+}
